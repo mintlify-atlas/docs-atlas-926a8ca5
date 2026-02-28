@@ -1,0 +1,160 @@
+{
+  "projectType": "framework",
+  "projectName": "Pi",
+  "projectDescription": "AI agent toolkit with coding agent CLI, unified LLM API, TUI & web UI libraries, Slack bot, and vLLM pod management.",
+  "theme": "aspen",
+  "primaryColor": "#5865F2",
+  "lightColor": "#7289DA",
+  "darkColor": "#4752C4",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quick-start"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/packages",
+              "concepts/extensibility"
+            ]
+          },
+          {
+            "group": "Coding Agent",
+            "pages": [
+              "coding-agent/overview",
+              "coding-agent/interactive-mode",
+              "coding-agent/sessions",
+              "coding-agent/customization",
+              "coding-agent/extensions",
+              "coding-agent/skills",
+              "coding-agent/prompt-templates",
+              "coding-agent/themes",
+              "coding-agent/pi-packages"
+            ]
+          },
+          {
+            "group": "LLM API",
+            "pages": [
+              "ai/overview",
+              "ai/providers",
+              "ai/streaming",
+              "ai/tools",
+              "ai/thinking",
+              "ai/oauth"
+            ]
+          },
+          {
+            "group": "Agent Core",
+            "pages": [
+              "agent/overview",
+              "agent/transport",
+              "agent/state-management"
+            ]
+          },
+          {
+            "group": "UI Libraries",
+            "pages": [
+              "tui/overview",
+              "tui/components",
+              "web-ui/overview",
+              "web-ui/components"
+            ]
+          },
+          {
+            "group": "Additional Tools",
+            "pages": [
+              "mom/slack-bot",
+              "pods/vllm-management"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/building-extensions",
+              "guides/creating-skills",
+              "guides/custom-providers",
+              "guides/programmatic-usage",
+              "guides/cross-provider-handoffs"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Coding Agent API",
+            "pages": [
+              "api/coding-agent/agent-session",
+              "api/coding-agent/extension-api",
+              "api/coding-agent/tools",
+              "api/coding-agent/session-manager"
+            ]
+          },
+          {
+            "group": "LLM API",
+            "pages": [
+              "api/ai/stream",
+              "api/ai/complete",
+              "api/ai/models",
+              "api/ai/context",
+              "api/ai/types"
+            ]
+          },
+          {
+            "group": "Agent Core API",
+            "pages": [
+              "api/agent/core",
+              "api/agent/transport",
+              "api/agent/types"
+            ]
+          },
+          {
+            "group": "TUI API",
+            "pages": [
+              "api/tui/components",
+              "api/tui/rendering",
+              "api/tui/types"
+            ]
+          },
+          {
+            "group": "Web UI API",
+            "pages": [
+              "api/web-ui/components",
+              "api/web-ui/types"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Interactive coding agent CLI with TUI",
+    "Unified LLM API supporting 15+ providers",
+    "Extensible plugin system with TypeScript extensions",
+    "Agent Skills standard support",
+    "Session management with branching and compaction",
+    "Terminal and web UI component libraries",
+    "Slack bot integration (mom)",
+    "vLLM pod management CLI"
+  ],
+  "publicApiSurface": [
+    "@mariozechner/pi-coding-agent: AgentSession, createAgentSession, ExtensionAPI, tools (read/write/edit/bash)",
+    "@mariozechner/pi-ai: stream, complete, getModel, Tool, Context, OAuth providers",
+    "@mariozechner/pi-agent-core: Agent runtime with state management",
+    "@mariozechner/pi-tui: Terminal UI components with differential rendering",
+    "@mariozechner/pi-web-ui: Web components for AI chat interfaces",
+    "@mariozechner/pi-mom: Slack bot delegating to coding agent",
+    "@mariozechner/pi-pods: CLI for vLLM pod management",
+    "CLI commands: pi, pi-ai, mom, pi-pods"
+  ]
+}
