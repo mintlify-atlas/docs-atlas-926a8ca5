@@ -1,0 +1,445 @@
+---
+title: "Interactive Mode"
+description: "Editor features, commands, keyboard shortcuts, and message queue in Pi's interactive terminal UI"
+---
+
+Interactive mode is Pi's default interface, providing a full terminal UI with an editor, commands, keyboard shortcuts, and visual feedback.
+
+## Interface Layout
+
+The interface from top to bottom:
+
+<Steps>
+  <Step title="Startup Header">
+    Shows shortcuts (`/hotkeys` for all), loaded AGENTS.md files, prompt templates, skills, and extensions
+  </Step>
+  <Step title="Messages">
+    Your messages, assistant responses, tool calls and results, notifications, errors, and extension UI
+  </Step>
+  <Step title="Editor">
+    Where you type; border color indicates thinking level
+  </Step>
+  <Step title="Footer">
+    Working directory, session name, total token/cache usage, cost, context usage, current model
+  </Step>
+</Steps>
+
+The editor can be temporarily replaced by other UI, like built-in `/settings` or custom UI from extensions. Extensions can also add:
+- Widgets above/below the editor
+- Status lines in the footer
+- Custom overlays
+- Custom headers
+
+## Editor Features
+
+### File References
+
+Type `@` to fuzzy-search project files:
+
+```
+@src/main.ts
+@components/Button
+```
+
+The autocomplete shows matching files as you type. Selected files are included in your message context.
+
+### Path Completion
+
+Press `Tab` to complete file and directory paths:
+
+```
+./src/[Tab] → ./src/components/
+```
+
+### Multi-line Input
+
+- **Shift+Enter** - New line (Ctrl+Enter on Windows Terminal)
+- **Enter** - Submit message
+
+### Images
+
+**Paste from clipboard:**
+- **Ctrl+V** to paste (Alt+V on Windows)
+- Supports PNG, JPEG, BMP formats
+- Automatic conversion to supported formats
+
+**Drag and drop:**
+- Drag image files onto the terminal window
+- Works in terminals that support file drag-and-drop
+
+### Bash Commands
+
+Run shell commands directly from the editor:
+
+<Tabs>
+  <Tab title="! prefix">
+    ```bash
+    !git status
+    ```
+    Runs command and sends output to LLM
+  </Tab>
+  <Tab title="!! prefix">
+    ```bash
+    !!npm install
+    ```
+    Runs command without sending output to LLM
+  </Tab>
+</Tabs>
+
+Use `!!` for commands that produce large output or when you just want to run something without context pollution.
+
+### Standard Editing
+
+Supports standard keybindings:
+
+- **Ctrl+W** - Delete word
+- **Ctrl+U** - Delete to start of line
+- **Ctrl+K** - Delete to end of line
+- **Ctrl+A** - Move to start of line
+- **Ctrl+E** - Move to end of line
+- **Alt+Left/Right** - Move by word
+- **Ctrl+Z** (in input) - Undo
+- **Ctrl+Y** - Redo
+
+See the full list in the source at `packages/tui/src/components/editor.ts`.
+
+## Commands
+
+Type `/` in the editor to trigger commands. Autocomplete shows available commands with descriptions.
+
+### Built-in Commands
+
+<Tabs>
+  <Tab title="Authentication">
+    | Command | Description |
+    |---------|-------------|
+    | `/login` | OAuth authentication with provider |
+    | `/logout` | Logout from OAuth provider |
+  </Tab>
+  
+  <Tab title="Model Selection">
+    | Command | Description |
+    |---------|-------------|
+    | `/model` | Switch models (opens selector UI) |
+    | `/scoped-models` | Enable/disable models for Ctrl+P cycling |
+  </Tab>
+  
+  <Tab title="Configuration">
+    | Command | Description |
+    |---------|-------------|
+    | `/settings` | Thinking level, theme, message delivery, transport |
+    | `/hotkeys` | Show all keyboard shortcuts |
+    | `/changelog` | Display version history |
+  </Tab>
+  
+  <Tab title="Session Management">
+    | Command | Description |
+    |---------|-------------|
+    | `/resume` | Pick from previous sessions |
+    | `/new` | Start a new session |
+    | `/name <name>` | Set session display name |
+    | `/session` | Show session info (path, tokens, cost) |
+  </Tab>
+  
+  <Tab title="Navigation">
+    | Command | Description |
+    |---------|-------------|
+    | `/tree` | Jump to any point in session and continue from there |
+    | `/fork` | Create a new session from the current branch |
+  </Tab>
+  
+  <Tab title="Context">
+    | Command | Description |
+    |---------|-------------|
+    | `/compact [prompt]` | Manually compact context, optional custom instructions |
+    | `/reload` | Reload extensions, skills, prompts, context files |
+  </Tab>
+  
+  <Tab title="Utilities">
+    | Command | Description |
+    |---------|-------------|
+    | `/copy` | Copy last assistant message to clipboard |
+    | `/export [file]` | Export session to HTML file |
+    | `/share` | Upload as private GitHub gist with shareable HTML link |
+    | `/quit`, `/exit` | Quit pi |
+  </Tab>
+</Tabs>
+
+### Extension Commands
+
+Extensions can register custom commands:
+
+```typescript
+pi.registerCommand("deploy", {
+  description: "Deploy to environment",
+  handler: async (args, ctx) => {
+    // Command implementation
+  }
+});
+```
+
+Extension commands appear in autocomplete alongside built-in commands.
+
+### Skill Commands
+
+Skills register as `/skill:name` commands:
+
+```
+/skill:brave-search
+/skill:pdf-tools extract
+```
+
+Toggle skill commands in `/settings` or `settings.json`:
+
+```json
+{
+  "enableSkillCommands": true
+}
+```
+
+### Prompt Templates
+
+Prompt templates expand when you type `/templatename`:
+
+```markdown
+# ~/.pi/agent/prompts/review.md
+---
+description: Review staged git changes
+---
+Review the staged changes (`git diff --cached`). Focus on:
+- Bugs and logic errors
+- Security issues
+- Error handling gaps
+```
+
+Usage:
+```
+/review
+```
+
+Templates support arguments:
+```
+/component Button "click handler"
+```
+
+## Keyboard Shortcuts
+
+Press `/hotkeys` to see all shortcuts. Customize via `~/.pi/agent/keybindings.json`.
+
+### Essential Shortcuts
+
+<Tabs>
+  <Tab title="Editor Control">
+    | Key | Action |
+    |-----|--------|
+    | **Enter** | Submit message |
+    | **Shift+Enter** | New line (Ctrl+Enter on Windows) |
+    | **Ctrl+C** | Clear editor |
+    | **Ctrl+C** (twice) | Quit |
+    | **Ctrl+G** | Open external editor (respects `$VISUAL` or `$EDITOR`) |
+  </Tab>
+  
+  <Tab title="Agent Control">
+    | Key | Action |
+    |-----|--------|
+    | **Escape** | Cancel/abort current operation |
+    | **Escape** (twice) | Open `/tree` |
+    | **Alt+Enter** | Queue follow-up message |
+    | **Alt+Up** | Retrieve queued messages |
+  </Tab>
+  
+  <Tab title="Model Control">
+    | Key | Action |
+    |-----|--------|
+    | **Ctrl+L** | Open model selector |
+    | **Ctrl+P** | Cycle scoped models forward |
+    | **Shift+Ctrl+P** | Cycle scoped models backward |
+    | **Shift+Tab** | Cycle thinking level |
+  </Tab>
+  
+  <Tab title="Display">
+    | Key | Action |
+    |-----|--------|
+    | **Ctrl+O** | Collapse/expand tool output |
+    | **Ctrl+T** | Collapse/expand thinking blocks |
+  </Tab>
+  
+  <Tab title="System">
+    | Key | Action |
+    |-----|--------|
+    | **Ctrl+D** | Quit |
+    | **Ctrl+Z** | Suspend (returns to shell) |
+  </Tab>
+</Tabs>
+
+### Custom Keybindings
+
+Create `~/.pi/agent/keybindings.json` to customize:
+
+```json
+{
+  "clear": "ctrl+l",
+  "cycleModelForward": "ctrl+m",
+  "selectModel": "ctrl+shift+m"
+}
+```
+
+Available actions:
+- **App actions**: `interrupt`, `clear`, `exit`, `suspend`, `cycleThinkingLevel`, `cycleModelForward`, `cycleModelBackward`, `selectModel`, `expandTools`, `toggleThinking`, `externalEditor`, `followUp`, `dequeue`, `pasteImage`, `newSession`, `tree`, `fork`, `resume`
+- **Editor actions**: See `packages/tui` documentation
+
+## Message Queue
+
+Submit messages while the agent is working:
+
+<Steps>
+  <Step title="Steering Messages (Enter)">
+    Delivered after current tool execution. **Interrupts remaining tools**.
+    
+    Use when you want to redirect the agent immediately:
+    ```
+    > Agent is running 5 tools...
+    > [Press Enter] "Focus on error handling"
+    > Current tool finishes, remaining tools skipped
+    ```
+  </Step>
+  
+  <Step title="Follow-up Messages (Alt+Enter)">
+    Delivered only after agent finishes **all** work.
+    
+    Use when you want to add something for later:
+    ```
+    > Agent is running 5 tools...
+    > [Press Alt+Enter] "Then add tests"
+    > All 5 tools complete
+    > Follow-up message delivered
+    ```
+  </Step>
+  
+  <Step title="Abort (Escape)">
+    Cancels current operation and restores queued messages to editor.
+  </Step>
+  
+  <Step title="Retrieve (Alt+Up)">
+    Pulls queued messages back into the editor for editing.
+  </Step>
+</Steps>
+
+### Delivery Modes
+
+Configure in `/settings` or `settings.json`:
+
+```json
+{
+  "steeringMode": "one-at-a-time",    // or "all"
+  "followUpMode": "one-at-a-time",   // or "all"
+  "transport": "sse"                 // or "websocket", "auto"
+}
+```
+
+**Modes:**
+- `"one-at-a-time"` (default) - Waits for response after each message
+- `"all"` - Delivers all queued messages at once
+
+**Transport:**
+- `"sse"` - Server-Sent Events (default, more reliable)
+- `"websocket"` - WebSocket (lower latency when available)
+- `"auto"` - Let provider choose
+
+## Context Files
+
+Pi automatically loads `AGENTS.md` (or `CLAUDE.md`) from:
+
+1. `~/.pi/agent/AGENTS.md` (global)
+2. Parent directories (walking up from cwd)
+3. Current directory
+
+All matching files are concatenated and included in the system prompt.
+
+**Example `AGENTS.md`:**
+```markdown
+# Project Guidelines
+
+- Use TypeScript strict mode
+- Test all functions with vitest
+- Follow existing code style
+
+# Common Commands
+
+- `npm run check` - Type check and lint
+- `npm test` - Run tests
+```
+
+### Custom System Prompt
+
+Replace the default system prompt:
+
+- **Global:** `~/.pi/agent/SYSTEM.md`
+- **Project:** `.pi/SYSTEM.md`
+
+Append without replacing:
+
+- **Global:** `~/.pi/agent/APPEND_SYSTEM.md`
+- **Project:** `.pi/APPEND_SYSTEM.md`
+
+## Terminal Setup
+
+For best results:
+
+**Recommended terminals:**
+- iTerm2 (macOS)
+- Kitty (Linux/macOS)
+- WezTerm (cross-platform)
+- Windows Terminal (Windows)
+- VS Code integrated terminal
+
+**Enable 24-bit color:**
+```bash
+# Check truecolor support
+echo $COLORTERM  # Should output "truecolor" or "24bit"
+
+# VS Code: Set minimum contrast ratio to 1
+"terminal.integrated.minimumContrastRatio": 1
+```
+
+**Font recommendations:**
+- Use a font with good Unicode support
+- Enable ligatures for better code display
+- Monospace fonts with clear distinction between characters
+
+## Shell Aliases
+
+Useful aliases to add to your `.bashrc` or `.zshrc`:
+
+```bash
+# Quick pi invocations
+alias p='pi'
+alias pc='pi -c'          # Continue
+alias pr='pi -r'          # Resume
+alias pp='pi -p'          # Print mode
+
+# Common tasks
+alias preview='pi -p @README.md "Review and suggest improvements"'
+alias review='pi "/review"'
+```
+
+## Platform Notes
+
+### Windows
+
+See `docs/windows.md` in the coding-agent package for Windows-specific setup.
+
+### Termux (Android)
+
+See `docs/termux.md` in the coding-agent package for Android/Termux setup.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sessions" icon="diagram-project" href="/coding-agent/sessions">
+    Learn about branching, compaction, and tree navigation
+  </Card>
+  <Card title="Customization" icon="sliders" href="/coding-agent/customization">
+    Configure settings, keybindings, and appearance
+  </Card>
+</CardGroup>

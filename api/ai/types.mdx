@@ -1,0 +1,363 @@
+---
+title: Type Definitions
+description: Core type definitions for the AI package
+---
+
+Core TypeScript types used throughout the `@mariozechner/pi-ai` package.
+
+## Import
+
+```typescript
+import type {
+  Api,
+  Provider,
+  Model,
+  ThinkingLevel,
+  StreamOptions,
+  SimpleStreamOptions,
+} from "@mariozechner/pi-ai";
+```
+
+## API Types
+
+### Api
+
+API identifier for LLM providers.
+
+```typescript
+type Api = KnownApi | (string & {});
+
+type KnownApi =
+  | "openai-completions"
+  | "openai-responses"
+  | "azure-openai-responses"
+  | "anthropic-messages"
+  | "bedrock-converse-stream"
+  | "google-generative-ai"
+  | "google-gemini-cli"
+  | "google-vertex";
+```
+
+### Provider
+
+Provider identifier.
+
+```typescript
+type Provider = KnownProvider | string;
+
+type KnownProvider =
+  | "anthropic"
+  | "openai"
+  | "google"
+  | "google-vertex"
+  | "google-gemini-cli"
+  | "amazon-bedrock"
+  | "xai"
+  | "groq"
+  | "cerebras"
+  | "openrouter"
+  | "github-copilot"
+  | "mistral"
+  | "minimax"
+  | "huggingface";
+```
+
+## Model Type
+
+Model metadata and configuration.
+
+```typescript
+interface Model<TApi extends Api = Api> {
+  id: string;
+  provider: string;
+  api: TApi;
+  displayName: string;
+  contextWindow: number;
+  maxOutput: number;
+  cost: {
+    input: number;      // USD per 1M tokens
+    output: number;     // USD per 1M tokens
+    cacheRead: number;  // USD per 1M tokens
+    cacheWrite: number; // USD per 1M tokens
+  };
+  capabilities: string[];
+}
+```
+
+### Example
+
+```typescript
+import { getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("anthropic", "claude-4.5-sonnet-20250514");
+
+// Type-safe access
+const id: string = model.id;
+const provider: string = model.provider;
+const api: "anthropic-messages" = model.api;
+```
+
+## Thinking Level
+
+Reasoning intensity for extended thinking models.
+
+```typescript
+type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+```
+
+- `"off"` - No extended reasoning
+- `"minimal"` - Minimal reasoning (~100 tokens)
+- `"low"` - Low reasoning (~500 tokens)
+- `"medium"` - Medium reasoning (~2000 tokens)
+- `"high"` - High reasoning (~8000 tokens)
+- `"xhigh"` - Extra high reasoning (GPT-5.2/5.3 and Opus 4.6 only)
+
+## Stream Options
+
+### StreamOptions
+
+Base options for all stream functions.
+
+```typescript
+interface StreamOptions {
+  temperature?: number;
+  maxTokens?: number;
+  signal?: AbortSignal;
+  apiKey?: string;
+  transport?: Transport;
+  cacheRetention?: CacheRetention;
+  sessionId?: string;
+  onPayload?: (payload: unknown) => void;
+  headers?: Record<string, string>;
+  maxRetryDelayMs?: number;
+  metadata?: Record<string, unknown>;
+}
+```
+
+<ParamField path="temperature" type="number">
+  Sampling temperature (0-2). Higher values = more random.
+</ParamField>
+
+<ParamField path="maxTokens" type="number">
+  Maximum tokens to generate
+</ParamField>
+
+<ParamField path="signal" type="AbortSignal">
+  Abort signal for cancellation
+</ParamField>
+
+<ParamField path="apiKey" type="string">
+  API key for authentication
+</ParamField>
+
+<ParamField path="transport" type="Transport">
+  Transport protocol: `"sse"`, `"websocket"`, or `"auto"`
+</ParamField>
+
+<ParamField path="cacheRetention" type="CacheRetention">
+  Prompt cache retention: `"none"`, `"short"`, or `"long"`. Default: `"short"`
+</ParamField>
+
+<ParamField path="sessionId" type="string">
+  Session identifier for session-based caching
+</ParamField>
+
+<ParamField path="onPayload" type="(payload: unknown) => void">
+  Callback for inspecting provider payloads
+</ParamField>
+
+<ParamField path="headers" type="Record<string, string>">
+  Custom HTTP headers
+</ParamField>
+
+<ParamField path="maxRetryDelayMs" type="number">
+  Maximum retry delay in milliseconds. Default: `60000` (60 seconds)
+</ParamField>
+
+<ParamField path="metadata" type="Record<string, unknown>">
+  Provider-specific metadata
+</ParamField>
+
+### SimpleStreamOptions
+
+Options for `streamSimple()` and `completeSimple()` with unified reasoning.
+
+```typescript
+interface SimpleStreamOptions extends StreamOptions {
+  reasoning?: ThinkingLevel;
+  thinkingBudgets?: ThinkingBudgets;
+}
+```
+
+<ParamField path="reasoning" type="ThinkingLevel">
+  Thinking level: `"off"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`
+</ParamField>
+
+<ParamField path="thinkingBudgets" type="ThinkingBudgets">
+  Custom token budgets for thinking levels (token-based providers only)
+</ParamField>
+
+### ThinkingBudgets
+
+Custom token budgets for thinking levels.
+
+```typescript
+interface ThinkingBudgets {
+  minimal?: number;
+  low?: number;
+  medium?: number;
+  high?: number;
+}
+```
+
+## Transport Types
+
+### Transport
+
+Transport protocol preference.
+
+```typescript
+type Transport = "sse" | "websocket" | "auto";
+```
+
+- `"sse"` - Server-Sent Events (HTTP streaming)
+- `"websocket"` - WebSocket connection
+- `"auto"` - Let provider choose best transport
+
+### CacheRetention
+
+Prompt cache retention preference.
+
+```typescript
+type CacheRetention = "none" | "short" | "long";
+```
+
+- `"none"` - No caching
+- `"short"` - Cache for 5 minutes (default)
+- `"long"` - Cache for 1 hour
+
+## Event Types
+
+### AssistantMessageEvent
+
+Events emitted during streaming.
+
+```typescript
+type AssistantMessageEvent =
+  | TextEvent
+  | ThinkingEvent
+  | ToolCallEvent
+  | UsageEvent
+  | StopEvent
+  | ErrorEvent;
+
+interface TextEvent {
+  type: "text";
+  delta: string;
+}
+
+interface ThinkingEvent {
+  type: "thinking";
+  delta: string;
+}
+
+interface ToolCallEvent {
+  type: "tool_call";
+  toolCall: ToolCall;
+}
+
+interface UsageEvent {
+  type: "usage";
+  usage: Usage;
+}
+
+interface StopEvent {
+  type: "stop";
+  reason: string;
+}
+
+interface ErrorEvent {
+  type: "error";
+  error: Error;
+}
+```
+
+## Provider Options
+
+### ProviderStreamOptions
+
+Extensible options allowing provider-specific parameters.
+
+```typescript
+type ProviderStreamOptions = StreamOptions & Record<string, unknown>;
+```
+
+Providers can extend `StreamOptions` with custom fields:
+
+```typescript
+import { stream, getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("anthropic", "claude-4.5-sonnet-20250514");
+
+const eventStream = stream(model, context, {
+  temperature: 0.7,
+  // Anthropic-specific options:
+  thinking: { type: "enabled", budget_tokens: 2000 },
+});
+```
+
+## Type Utilities
+
+### Type Exports from TypeBox
+
+The package re-exports TypeBox utilities for type definitions:
+
+```typescript
+import { Type, type Static, type TSchema } from "@mariozechner/pi-ai";
+
+// Define a schema
+const MySchema = Type.Object({
+  name: Type.String(),
+  age: Type.Number(),
+});
+
+// Extract TypeScript type
+type MyType = Static<typeof MySchema>;
+// = { name: string; age: number; }
+```
+
+## Usage Example
+
+```typescript
+import type {
+  Model,
+  Context,
+  SimpleStreamOptions,
+  AssistantMessage,
+} from "@mariozechner/pi-ai";
+import { streamSimple, getModel } from "@mariozechner/pi-ai";
+
+// Type-safe model selection
+const model: Model<"anthropic-messages"> = getModel(
+  "anthropic",
+  "claude-4.5-sonnet-20250514"
+);
+
+// Type-safe context
+const context: Context = {
+  systemPrompt: "You are helpful.",
+  messages: [
+    { role: "user", content: "Hello", timestamp: Date.now() },
+  ],
+};
+
+// Type-safe options
+const options: SimpleStreamOptions = {
+  reasoning: "medium",
+  temperature: 0.7,
+  maxTokens: 1000,
+};
+
+const stream = streamSimple(model, context, options);
+const message: AssistantMessage = await stream.result();
+```

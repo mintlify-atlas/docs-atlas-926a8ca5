@@ -1,0 +1,165 @@
+---
+title: 'LLM API Overview'
+description: 'Unified interface for interacting with 15+ LLM providers with automatic model discovery, tool calling, and streaming support'
+---
+
+# LLM API Overview
+
+The `@mariozechner/pi-ai` package provides a unified API for interacting with Large Language Models from multiple providers. It abstracts away provider-specific differences while maintaining full access to advanced features like tool calling, streaming, and reasoning capabilities.
+
+## Key Features
+
+### Unified Interface
+Single API that works across 15+ providers including OpenAI, Anthropic, Google, xAI, Groq, Cerebras, and more. Switch between models without changing your code.
+
+### Type Safety
+Full TypeScript support with auto-completion for providers, models, and options. TypeBox schemas ensure runtime validation of tool parameters.
+
+### Automatic Model Discovery
+Query available models with full metadata including context windows, pricing, capabilities (vision, reasoning), and API type.
+
+### Tool Calling (Function Calling)
+Define tools with TypeBox schemas for automatic validation. Supports streaming partial tool arguments as they arrive.
+
+### Streaming Support
+Real-time streaming of text, thinking/reasoning, and tool calls with granular events for building responsive UIs.
+
+### Cost Tracking
+Automatic token counting and cost calculation per request with breakdown by input, output, and cache usage.
+
+### Cross-Provider Handoffs
+Seamlessly switch models mid-conversation while preserving context, tool calls, and thinking blocks.
+
+### Context Serialization
+Contexts are plain JSON objects that can be easily serialized, stored, and transferred between services.
+
+## Installation
+
+```bash
+npm install @mariozechner/pi-ai
+```
+
+TypeBox types (`Type`, `Static`, `TSchema`) are re-exported from the package.
+
+## Core Concepts
+
+### Models
+
+Models are identified by provider and model ID. The library includes metadata for all supported models:
+
+```typescript
+import { getModel, getProviders, getModels } from '@mariozechner/pi-ai';
+
+// Get all providers
+const providers = getProviders();
+console.log(providers); // ['openai', 'anthropic', 'google', ...]
+
+// Get all models from a provider
+const anthropicModels = getModels('anthropic');
+
+// Get a specific model (fully typed)
+const model = getModel('openai', 'gpt-4o-mini');
+console.log(model.contextWindow); // 128000
+console.log(model.reasoning); // false
+console.log(model.input); // ['text', 'image']
+```
+
+### Context
+
+A context contains the conversation history, system prompt, and available tools:
+
+```typescript
+import { Context } from '@mariozechner/pi-ai';
+
+const context: Context = {
+  systemPrompt: 'You are a helpful assistant.',
+  messages: [
+    { role: 'user', content: 'Hello!' }
+  ],
+  tools: [] // optional
+};
+```
+
+### Messages
+
+Three message types:
+- `UserMessage` - User input (text and/or images)
+- `AssistantMessage` - Model responses with text, thinking, and tool calls
+- `ToolResultMessage` - Results from tool execution (text and/or images)
+
+### Streaming vs Complete
+
+Two ways to interact with models:
+
+```typescript
+import { stream, complete } from '@mariozechner/pi-ai';
+
+// Streaming - get real-time events
+const s = stream(model, context);
+for await (const event of s) {
+  if (event.type === 'text_delta') {
+    process.stdout.write(event.delta);
+  }
+}
+const message = await s.result();
+
+// Complete - wait for full response
+const message = await complete(model, context);
+```
+
+## Quick Example
+
+```typescript
+import { getModel, stream, complete, Type, Tool, Context } from '@mariozechner/pi-ai';
+
+// Get a model
+const model = getModel('openai', 'gpt-4o-mini');
+
+// Define tools
+const tools: Tool[] = [{
+  name: 'get_weather',
+  description: 'Get current weather',
+  parameters: Type.Object({
+    location: Type.String({ description: 'City name' })
+  })
+}];
+
+// Create context
+const context: Context = {
+  systemPrompt: 'You are a helpful assistant.',
+  messages: [{ role: 'user', content: 'What is the weather in London?' }],
+  tools
+};
+
+// Stream response
+const s = stream(model, context);
+for await (const event of s) {
+  if (event.type === 'text_delta') {
+    process.stdout.write(event.delta);
+  } else if (event.type === 'toolcall_end') {
+    console.log(`Tool called: ${event.toolCall.name}`);
+    console.log(`Arguments: ${JSON.stringify(event.toolCall.arguments)}`);
+  }
+}
+
+const response = await s.result();
+console.log(`Tokens: ${response.usage.totalTokens}`);
+console.log(`Cost: $${response.usage.cost.total.toFixed(4)}`);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Providers" icon="server" href="/ai/providers">
+    Explore all 15+ supported providers and their setup
+  </Card>
+  <Card title="Streaming" icon="wave-pulse" href="/ai/streaming">
+    Learn about streaming events and real-time responses
+  </Card>
+  <Card title="Tools" icon="wrench" href="/ai/tools">
+    Define and use tool calling for agentic workflows
+  </Card>
+  <Card title="Thinking" icon="brain" href="/ai/thinking">
+    Enable reasoning capabilities across providers
+  </Card>
+</CardGroup>

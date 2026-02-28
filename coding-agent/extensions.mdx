@@ -1,0 +1,616 @@
+---
+title: "Extensions"
+description: "Building TypeScript extensions to customize Pi's behavior with custom tools, commands, UI, and event handlers"
+---
+
+<Note>
+Pi can create extensions for you. Just ask it to build one for your use case.
+</Note>
+
+Extensions are TypeScript modules that extend Pi's behavior. They can subscribe to lifecycle events, register custom tools callable by the LLM, add commands, keyboard shortcuts, and more.
+
+## Key Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Custom Tools" icon="wrench">
+    Register tools the LLM can call via `pi.registerTool()`
+  </Card>
+  <Card title="Event Interception" icon="filter">
+    Block or modify tool calls, inject context, customize compaction
+  </Card>
+  <Card title="User Interaction" icon="message">
+    Prompt users via `ctx.ui` (select, confirm, input, notify)
+  </Card>
+  <Card title="Custom UI" icon="window">
+    Full TUI components with keyboard input for complex interactions
+  </Card>
+  <Card title="Custom Commands" icon="terminal">
+    Register commands like `/mycommand` via `pi.registerCommand()`
+  </Card>
+  <Card title="Session Persistence" icon="database">
+    Store state that survives restarts via `pi.appendEntry()`
+  </Card>
+</CardGroup>
+
+## Extension Locations
+
+<Warning>
+Extensions run with your full system permissions and can execute arbitrary code. Only install from sources you trust.
+</Warning>
+
+Extensions are auto-discovered from:
+
+| Location | Scope |
+|----------|-------|
+| `~/.pi/agent/extensions/*.ts` | Global (all projects) |
+| `~/.pi/agent/extensions/*/index.ts` | Global (subdirectory) |
+| `.pi/extensions/*.ts` | Project-local |
+| `.pi/extensions/*/index.ts` | Project-local (subdirectory) |
+
+**For quick tests:**
+```bash
+pi -e ./my-extension.ts
+```
+
+**For auto-discovery and hot-reload:**
+Place in auto-discovered locations, then use `/reload` to reload changes.
+
+## Quick Start
+
+Create `~/.pi/agent/extensions/hello.ts`:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+
+export default function (pi: ExtensionAPI) {
+  // React to events
+  pi.on("session_start", async (_event, ctx) => {
+    ctx.ui.notify("Extension loaded!", "info");
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName === "bash" && event.input.command?.includes("rm -rf")) {
+      const ok = await ctx.ui.confirm("Dangerous!", "Allow rm -rf?");
+      if (!ok) return { block: true, reason: "Blocked by user" };
+    }
+  });
+
+  // Register a custom tool
+  pi.registerTool({
+    name: "greet",
+    label: "Greet",
+    description: "Greet someone by name",
+    parameters: Type.Object({
+      name: Type.String({ description: "Name to greet" }),
+    }),
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      return {
+        content: [{ type: "text", text: `Hello, ${params.name}!` }],
+        details: {},
+      };
+    },
+  });
+
+  // Register a command
+  pi.registerCommand("hello", {
+    description: "Say hello",
+    handler: async (args, ctx) => {
+      ctx.ui.notify(`Hello ${args || "world"}!`, "info");
+    },
+  });
+}
+```
+
+## Available Imports
+
+| Package | Purpose |
+|---------|---------||
+| `@mariozechner/pi-coding-agent` | Extension types, events |
+| `@sinclair/typebox` | Schema definitions for tool parameters |
+| `@mariozechner/pi-ai` | AI utilities (`StringEnum` for Google-compatible enums) |
+| `@mariozechner/pi-tui` | TUI components for custom rendering |
+
+npm dependencies work too. Add a `package.json`, run `npm install`, and imports resolve automatically.
+
+## Extension Structure
+
+<Tabs>
+  <Tab title="Single File">
+    Simplest for small extensions:
+    
+    ```
+    ~/.pi/agent/extensions/
+    └── my-extension.ts
+    ```
+  </Tab>
+  
+  <Tab title="Directory">
+    For multi-file extensions:
+    
+    ```
+    ~/.pi/agent/extensions/
+    └── my-extension/
+        ├── index.ts        # Entry point
+        ├── tools.ts        # Helper module
+        └── utils.ts        # Helper module
+    ```
+  </Tab>
+  
+  <Tab title="With Dependencies">
+    For extensions needing npm packages:
+    
+    ```
+    ~/.pi/agent/extensions/
+    └── my-extension/
+        ├── package.json
+        ├── package-lock.json
+        ├── node_modules/
+        └── src/
+            └── index.ts
+    ```
+    
+    ```json
+    {
+      "name": "my-extension",
+      "dependencies": {
+        "zod": "^3.0.0"
+      },
+      "pi": {
+        "extensions": ["./src/index.ts"]
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Events
+
+### Session Events
+
+<AccordionGroup>
+  <Accordion title="session_start">
+    Fired on initial session load:
+    
+    ```typescript
+    pi.on("session_start", async (_event, ctx) => {
+      ctx.ui.notify("Session started", "info");
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="session_before_switch / session_switch">
+    Fired when starting new session (`/new`) or switching (`/resume`):
+    
+    ```typescript
+    pi.on("session_before_switch", async (event, ctx) => {
+      if (event.reason === "new") {
+        const ok = await ctx.ui.confirm("Clear?", "Delete all messages?");
+        if (!ok) return { cancel: true };
+      }
+    });
+    
+    pi.on("session_switch", async (event, ctx) => {
+      // event.reason - "new" or "resume"
+      // event.previousSessionFile - session we came from
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="session_before_compact / session_compact">
+    Fired on compaction:
+    
+    ```typescript
+    pi.on("session_before_compact", async (event, ctx) => {
+      // Cancel compaction
+      return { cancel: true };
+      
+      // OR provide custom summary
+      return {
+        compaction: {
+          summary: "Your custom summary...",
+          firstKeptEntryId: event.preparation.firstKeptEntryId,
+          tokensBefore: event.preparation.tokensBefore,
+        }
+      };
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="session_shutdown">
+    Fired on exit:
+    
+    ```typescript
+    pi.on("session_shutdown", async (_event, ctx) => {
+      // Cleanup, save state
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Agent Events
+
+<AccordionGroup>
+  <Accordion title="before_agent_start">
+    Fired after user submits prompt, before agent loop. Can inject a message and/or modify system prompt:
+    
+    ```typescript
+    pi.on("before_agent_start", async (event, ctx) => {
+      return {
+        message: {
+          customType: "my-extension",
+          content: "Additional context for the LLM",
+          display: true,
+        },
+        systemPrompt: event.systemPrompt + "\n\nExtra instructions...",
+      };
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="agent_start / agent_end">
+    Fired once per user prompt:
+    
+    ```typescript
+    pi.on("agent_start", async (_event, ctx) => {});
+    
+    pi.on("agent_end", async (event, ctx) => {
+      // event.messages - messages from this prompt
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="turn_start / turn_end">
+    Fired for each turn (one LLM response + tool calls):
+    
+    ```typescript
+    pi.on("turn_start", async (event, ctx) => {
+      // event.turnIndex, event.timestamp
+    });
+    
+    pi.on("turn_end", async (event, ctx) => {
+      // event.turnIndex, event.message, event.toolResults
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="context">
+    Fired before each LLM call. Modify messages non-destructively:
+    
+    ```typescript
+    pi.on("context", async (event, ctx) => {
+      // event.messages - deep copy, safe to modify
+      const filtered = event.messages.filter(m => !shouldPrune(m));
+      return { messages: filtered };
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Tool Events
+
+<AccordionGroup>
+  <Accordion title="tool_call">
+    Fired before tool executes. **Can block:**
+    
+    ```typescript
+    import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
+    
+    pi.on("tool_call", async (event, ctx) => {
+      if (isToolCallEventType("bash", event)) {
+        // event.input is { command: string; timeout?: number }
+        if (event.input.command.includes("rm -rf")) {
+          return { block: true, reason: "Dangerous command" };
+        }
+      }
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="tool_result">
+    Fired after tool executes. **Can modify result:**
+    
+    ```typescript
+    import { isBashToolResult } from "@mariozechner/pi-coding-agent";
+    
+    pi.on("tool_result", async (event, ctx) => {
+      if (isBashToolResult(event)) {
+        // event.details is typed as BashToolDetails
+      }
+      
+      // Modify result
+      return {
+        content: [...],
+        details: {...},
+        isError: false
+      };
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Custom Tools
+
+Register tools the LLM can call:
+
+```typescript
+import { Type } from "@sinclair/typebox";
+import { StringEnum } from "@mariozechner/pi-ai";
+
+pi.registerTool({
+  name: "my_tool",
+  label: "My Tool",
+  description: "What this tool does (shown to LLM)",
+  parameters: Type.Object({
+    action: StringEnum(["list", "add"] as const),  // Use StringEnum for Google
+    text: Type.Optional(Type.String()),
+  }),
+
+  async execute(toolCallId, params, signal, onUpdate, ctx) {
+    // Check for cancellation
+    if (signal?.aborted) {
+      return { content: [{ type: "text", text: "Cancelled" }] };
+    }
+
+    // Stream progress updates
+    onUpdate?.({
+      content: [{ type: "text", text: "Working..." }],
+      details: { progress: 50 },
+    });
+
+    // Return result
+    return {
+      content: [{ type: "text", text: "Done" }],  // Sent to LLM
+      details: { data: result },                   // For rendering & state
+    };
+  },
+});
+```
+
+### Output Truncation
+
+**Tools MUST truncate output** to avoid overwhelming context:
+
+```typescript
+import {
+  truncateHead,
+  truncateTail,
+  formatSize,
+  DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINES,
+} from "@mariozechner/pi-coding-agent";
+
+async execute(toolCallId, params, signal, onUpdate, ctx) {
+  const output = await runCommand();
+
+  const truncation = truncateHead(output, {
+    maxLines: DEFAULT_MAX_LINES,
+    maxBytes: DEFAULT_MAX_BYTES,
+  });
+
+  let result = truncation.content;
+
+  if (truncation.truncated) {
+    const tempFile = writeTempFile(output);
+    result += `\n\n[Output truncated: ${truncation.outputLines} of ${truncation.totalLines} lines`;
+    result += ` (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}).`;
+    result += ` Full output saved to: ${tempFile}]`;
+  }
+
+  return { content: [{ type: "text", text: result }] };
+}
+```
+
+### Overriding Built-in Tools
+
+Register a tool with the same name as a built-in tool to override it:
+
+```typescript
+import { createReadTool } from "@mariozechner/pi-coding-agent";
+
+const localRead = createReadTool(ctx.cwd);
+
+pi.registerTool({
+  ...localRead,
+  async execute(id, params, signal, onUpdate, ctx) {
+    // Log access
+    console.log(`Reading: ${params.path}`);
+    
+    // Call original implementation
+    return localRead.execute(id, params, signal, onUpdate, ctx);
+  },
+});
+```
+
+Built-in tool factories:
+- `createReadTool`, `createWriteTool`, `createEditTool`
+- `createBashTool`, `createGrepTool`, `createFindTool`, `createLsTool`
+
+Source files in `packages/coding-agent/src/core/tools/`.
+
+## Custom Commands
+
+Register commands that users can invoke with `/`:
+
+```typescript
+pi.registerCommand("deploy", {
+  description: "Deploy to an environment",
+  getArgumentCompletions: (prefix: string) => {
+    const envs = ["dev", "staging", "prod"];
+    const filtered = envs.filter(e => e.startsWith(prefix));
+    return filtered.length > 0 ? filtered.map(e => ({ value: e, label: e })) : null;
+  },
+  handler: async (args, ctx) => {
+    ctx.ui.notify(`Deploying to: ${args}`, "info");
+    // Deployment logic...
+  },
+});
+```
+
+Users can then type:
+```
+/deploy prod
+```
+
+## Custom UI
+
+### Dialogs
+
+```typescript
+// Select from options
+const choice = await ctx.ui.select("Pick one:", ["A", "B", "C"]);
+
+// Confirm dialog
+const ok = await ctx.ui.confirm("Delete?", "This cannot be undone");
+
+// Text input
+const name = await ctx.ui.input("Name:", "placeholder");
+
+// Multi-line editor
+const text = await ctx.ui.editor("Edit:", "prefilled text");
+
+// Notification (non-blocking)
+ctx.ui.notify("Done!", "info");  // "info" | "warning" | "error"
+```
+
+### Timed Dialogs
+
+Dialogs support auto-dismissal with countdown:
+
+```typescript
+const confirmed = await ctx.ui.confirm(
+  "Timed Confirmation",
+  "This will auto-cancel in 5 seconds",
+  { timeout: 5000 }
+);
+
+if (confirmed) {
+  // User confirmed
+} else {
+  // User cancelled or timed out
+}
+```
+
+### Widgets
+
+Add widgets above/below the editor:
+
+```typescript
+// Add widget above editor (default)
+ctx.ui.setWidget("my-ext", ["Line 1", "Line 2"]);
+
+// Add widget below editor
+ctx.ui.setWidget("my-ext", ["Status info"], "below");
+
+// Remove widget
+ctx.ui.setWidget("my-ext", null);
+```
+
+### Footer Status
+
+Add status indicators in the footer:
+
+```typescript
+ctx.ui.setStatus("my-ext", "Processing...");
+
+// Clear status
+ctx.ui.setStatus("my-ext", null);
+```
+
+## State Management
+
+Extensions with state should store it in tool result `details`:
+
+```typescript
+export default function (pi: ExtensionAPI) {
+  let items: string[] = [];
+
+  // Reconstruct state from session
+  pi.on("session_start", async (_event, ctx) => {
+    items = [];
+    for (const entry of ctx.sessionManager.getBranch()) {
+      if (entry.type === "message" && entry.message.role === "toolResult") {
+        if (entry.message.toolName === "my_tool") {
+          items = entry.message.details?.items ?? [];
+        }
+      }
+    }
+  });
+
+  pi.registerTool({
+    name: "my_tool",
+    // ...
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      items.push("new item");
+      return {
+        content: [{ type: "text", text: "Added" }],
+        details: { items: [...items] },  // Store for reconstruction
+      };
+    },
+  });
+}
+```
+
+This ensures state survives:
+- Session reloads
+- Branch navigation
+- Extension reloads
+
+## Example Extensions
+
+See `packages/coding-agent/examples/extensions/` for working examples:
+
+<CardGroup cols={2}>
+  <Card title="hello.ts" icon="hand-wave">
+    Minimal custom tool example
+  </Card>
+  <Card title="tools.ts" icon="wrench">
+    Tool selector with state persistence
+  </Card>
+  <Card title="commands.ts" icon="terminal">
+    List all available slash commands
+  </Card>
+  <Card title="permission-gate.ts" icon="shield">
+    Confirm before destructive operations
+  </Card>
+  <Card title="git-checkpoint.ts" icon="code-branch">
+    Auto-stash changes at each turn
+  </Card>
+  <Card title="protected-paths.ts" icon="lock">
+    Block writes to sensitive files
+  </Card>
+  <Card title="ssh.ts" icon="server">
+    Execute tools remotely via SSH
+  </Card>
+  <Card title="plan-mode/" icon="list">
+    Complete plan mode implementation
+  </Card>
+  <Card title="subagent/" icon="users">
+    Multi-agent system with specialized roles
+  </Card>
+  <Card title="doom-overlay/" icon="gamepad">
+    Play Doom while waiting (yes, really)
+  </Card>
+</CardGroup>
+
+## API Reference
+
+Full API documentation:
+
+- **ExtensionAPI**: `pi.registerTool()`, `pi.registerCommand()`, `pi.on()`, `pi.sendMessage()`, etc.
+- **ExtensionContext**: `ctx.ui`, `ctx.sessionManager`, `ctx.modelRegistry`, `ctx.cwd`, etc.
+- **Events**: All event types and their payloads
+- **Tool utilities**: `truncateHead()`, `truncateTail()`, `formatSize()`, etc.
+
+See the full docs in `packages/coding-agent/docs/extensions.md` in the source repository.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skills" icon="book" href="/coding-agent/skills">
+    Create Agent Skills for on-demand capabilities
+  </Card>
+  <Card title="Pi Packages" icon="box" href="/coding-agent/pi-packages">
+    Share extensions via npm or git
+  </Card>
+</CardGroup>

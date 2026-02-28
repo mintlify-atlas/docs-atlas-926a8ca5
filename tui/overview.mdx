@@ -1,0 +1,122 @@
+---
+title: Terminal UI Overview
+description: Differential rendering framework for flicker-free terminal applications
+---
+
+The `@mariozechner/pi-tui` package provides a minimal terminal UI framework with differential rendering for building interactive CLI applications.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Differential Rendering" icon="bolt">
+    Three-strategy rendering that only updates what changed
+  </Card>
+  <Card title="Component-Based" icon="cube">
+    Simple Component interface with render() method
+  </Card>
+  <Card title="Synchronized Output" icon="sync">
+    CSI 2026 for atomic, flicker-free updates
+  </Card>
+  <Card title="Built-in Components" icon="box">
+    Text, Editor, Markdown, SelectList, Image, and more
+  </Card>
+</CardGroup>
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @mariozechner/pi-tui
+```
+
+```bash yarn
+yarn add @mariozechner/pi-tui
+```
+
+```bash pnpm
+pnpm add @mariozechner/pi-tui
+```
+</CodeGroup>
+
+## Quick Start
+
+```typescript
+import { TUI, Text, Editor, ProcessTerminal } from "@mariozechner/pi-tui";
+
+const terminal = new ProcessTerminal();
+const tui = new TUI(terminal);
+
+tui.addChild(new Text("Welcome to my app!"));
+
+const editor = new Editor(tui, editorTheme);
+editor.onSubmit = (text) => {
+  console.log("Submitted:", text);
+  tui.addChild(new Text(`You said: ${text}`));
+};
+tui.addChild(editor);
+
+tui.start();
+```
+
+## Core Concepts
+
+### Component Interface
+
+All components implement:
+
+```typescript
+interface Component {
+  render(width: number): string[];
+  handleInput?(data: string): void;
+  invalidate?(): void;
+}
+```
+
+### Differential Rendering
+
+Three rendering strategies:
+1. **First Render** - Output all lines without clearing
+2. **Width/Viewport Change** - Clear and full re-render
+3. **Normal Update** - Only render changed lines
+
+All wrapped in synchronized output for flicker-free updates.
+
+### Overlays
+
+Render components on top of existing content:
+
+```typescript
+const handle = tui.showOverlay(component, {
+  width: "80%",
+  anchor: "center",
+  maxHeight: 20,
+});
+
+handle.hide();
+```
+
+## Built-in Components
+
+- **Container** - Groups child components
+- **Box** - Container with padding and background
+- **Text** - Multi-line text with word wrapping
+- **TruncatedText** - Single-line truncated text
+- **Input** - Single-line text input
+- **Editor** - Multi-line editor with autocomplete
+- **Markdown** - Rendered markdown with syntax highlighting
+- **Loader** - Animated loading spinner
+- **SelectList** - Interactive selection list
+- **SettingsList** - Settings panel with value cycling
+- **Image** - Inline images (Kitty/iTerm2)
+- **Spacer** - Vertical spacing
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Components" icon="cube" href="/tui/components">
+    Explore built-in components
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/tui/components">
+    Complete TUI API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,385 @@
+---
+title: Cross-Provider Model Handoffs
+description: Switch between different LLM providers mid-conversation while preserving context and tool calls
+---
+
+Pi's AI library supports seamless handoffs between different LLM providers within the same conversation. You can switch models mid-conversation while preserving context, including thinking blocks, tool calls, and tool results.
+
+## How It Works
+
+When messages from one provider are sent to a different provider, the library automatically transforms them for compatibility:
+
+- **User and tool result messages** are passed through unchanged
+- **Assistant messages from the same provider/API** are preserved as-is
+- **Assistant messages from different providers** have their thinking blocks converted to text with `<thinking>` tags
+- **Tool calls and regular text** are preserved unchanged
+
+This enables you to start with one model, then switch to another while maintaining conversation continuity.
+
+## Quick Example
+
+```typescript
+import { getModel, complete, type Context } from "@mariozechner/pi-ai";
+
+// Start with Claude
+const claude = getModel("anthropic", "claude-sonnet-4-20250514");
+const context: Context = { messages: [] };
+
+context.messages.push({ role: "user", content: "What is 25 * 18?" });
+const claudeResponse = await complete(claude, context, {
+  thinkingEnabled: true
+});
+context.messages.push(claudeResponse);
+
+// Switch to GPT-5 - it will see Claude's thinking as <thinking> tagged text
+const gpt5 = getModel("openai", "gpt-5-mini");
+context.messages.push({ role: "user", content: "Is that calculation correct?" });
+const gptResponse = await complete(gpt5, context);
+context.messages.push(gptResponse);
+
+// Switch to Gemini
+const gemini = getModel("google", "gemini-2.5-flash");
+context.messages.push({ role: "user", content: "What was the original question?" });
+const geminiResponse = await complete(gemini, context);
+```
+
+## With Pi SDK
+
+Use cross-provider handoffs in Pi sessions:
+
+<Steps>
+
+### Set Initial Model
+
+```typescript
+import { getModel } from "@mariozechner/pi-ai";
+import { createAgentSession, AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
+
+const authStorage = AuthStorage.create();
+const modelRegistry = new ModelRegistry(authStorage);
+
+const haiku = getModel("anthropic", "claude-haiku-4-5");
+
+const { session } = await createAgentSession({
+  model: haiku,
+  authStorage,
+  modelRegistry,
+});
+
+await session.prompt("Analyze the authentication code in this repo");
+```
+
+### Switch Models
+
+Change to a different model mid-conversation:
+
+```typescript
+const sonnet = getModel("anthropic", "claude-sonnet-4-5");
+await session.setModel(sonnet);
+
+await session.prompt("Now refactor it to use OAuth");
+```
+
+### Switch Providers
+
+Switch to a completely different provider:
+
+```typescript
+const gpt5 = getModel("openai", "gpt-5-mini");
+await session.setModel(gpt5);
+
+await session.prompt("Review the changes for security issues");
+```
+
+</Steps>
+
+## Use Cases
+
+<Tabs>
+  <Tab title="Fast to Capable">
+    Start with a fast model for initial responses, then switch to a more capable model for complex reasoning:
+
+    ```typescript
+    // Quick initial scan with Haiku
+    const haiku = getModel("anthropic", "claude-haiku-4-5");
+    const { session } = await createAgentSession({ model: haiku });
+    await session.prompt("Find all authentication code");
+
+    // Deep analysis with Opus
+    const opus = getModel("anthropic", "claude-opus-4-5");
+    await session.setModel(opus);
+    await session.prompt("Analyze these files for security vulnerabilities");
+    ```
+  </Tab>
+  <Tab title="Specialized Models">
+    Use specialized models for specific tasks:
+
+    ```typescript
+    // Code generation with Codex
+    const codex = getModel("openai-codex", "gpt-5-codex");
+    const { session } = await createAgentSession({ model: codex });
+    await session.prompt("Implement the OAuth flow");
+
+    // Code review with Claude
+    const sonnet = getModel("anthropic", "claude-sonnet-4-5");
+    await session.setModel(sonnet);
+    await session.prompt("Review the implementation for best practices");
+    ```
+  </Tab>
+  <Tab title="Failover">
+    Maintain conversation continuity across provider outages:
+
+    ```typescript
+    try {
+      await session.prompt("Continue the refactoring");
+    } catch (error) {
+      if (error.message.includes("rate limit")) {
+        // Switch to backup provider
+        const backup = getModel("google", "gemini-2.5-flash");
+        await session.setModel(backup);
+        await session.prompt("Continue the refactoring");
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Cost Optimization">
+    Use cheaper models for simple tasks:
+
+    ```typescript
+    // Cheap model for simple queries
+    const haiku = getModel("anthropic", "claude-haiku-4-5");
+    const { session } = await createAgentSession({ model: haiku });
+    await session.prompt("List all test files");
+
+    // Expensive model only when needed
+    const opus = getModel("anthropic", "claude-opus-4-5");
+    await session.setModel(opus);
+    await session.prompt("Generate comprehensive test coverage");
+    ```
+  </Tab>
+</Tabs>
+
+## Context Serialization
+
+The `Context` object can be serialized for persistence or transfer:
+
+```typescript
+import { type Context, getModel, complete } from "@mariozechner/pi-ai";
+
+// Create and use a context
+const context: Context = {
+  systemPrompt: "You are a helpful assistant.",
+  messages: [
+    { role: "user", content: "What is TypeScript?" }
+  ]
+};
+
+const claude = getModel("anthropic", "claude-sonnet-4-5");
+const response = await complete(claude, context);
+context.messages.push(response);
+
+// Serialize the entire context
+const serialized = JSON.stringify(context);
+
+// Save to database, localStorage, file, etc.
+localStorage.setItem("conversation", serialized);
+
+// Later: deserialize and continue with any model
+const restored: Context = JSON.parse(localStorage.getItem("conversation")!);
+restored.messages.push({ role: "user", content: "Tell me more about its type system" });
+
+const gpt5 = getModel("openai", "gpt-5-mini");
+const continuation = await complete(gpt5, restored);
+```
+
+<Note>
+If the context contains images (encoded as base64), those will also be serialized.
+</Note>
+
+## Provider Compatibility
+
+All providers can handle messages from other providers:
+
+| Content Type | Compatibility |
+|--------------|---------------|
+| Text content | ✓ Fully compatible |
+| Tool calls | ✓ Fully compatible |
+| Tool results (text) | ✓ Fully compatible |
+| Tool results (images) | ✓ Fully compatible (for vision models) |
+| Thinking blocks | ✓ Converted to tagged text for cross-provider |
+| Aborted messages | ✓ Partial content preserved |
+
+## Thinking Block Conversion
+
+When switching providers, thinking blocks are transformed:
+
+<Tabs>
+  <Tab title="Same Provider">
+    Thinking blocks are preserved as-is:
+
+    ```typescript
+    // Claude → Claude
+    const sonnet = getModel("anthropic", "claude-sonnet-4-5");
+    const response = await complete(sonnet, context, { thinkingEnabled: true });
+    // response.content contains { type: "thinking", thinking: "..." }
+
+    // Send to another Claude model
+    const opus = getModel("anthropic", "claude-opus-4-5");
+    context.messages.push(response);
+    await complete(opus, context);
+    // Opus sees the thinking block natively
+    ```
+  </Tab>
+  <Tab title="Different Providers">
+    Thinking blocks are converted to tagged text:
+
+    ```typescript
+    // Claude → GPT-5
+    const sonnet = getModel("anthropic", "claude-sonnet-4-5");
+    const response = await complete(sonnet, context, { thinkingEnabled: true });
+    // response.content contains { type: "thinking", thinking: "Let me calculate..." }
+
+    // Send to GPT-5
+    const gpt5 = getModel("openai", "gpt-5-mini");
+    context.messages.push(response);
+    await complete(gpt5, context);
+    // GPT-5 sees: "<thinking>Let me calculate...</thinking>"
+    ```
+  </Tab>
+</Tabs>
+
+## Aborted Messages
+
+Aborted messages can be added to the conversation context and continued:
+
+```typescript
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 2000);
+
+const partial = await complete(model, context, { signal: controller.signal });
+// partial.stopReason === "aborted"
+// partial.content contains partial text/tool calls
+
+// Add to context and continue with different model
+context.messages.push(partial);
+context.messages.push({ role: "user", content: "Please continue" });
+
+const continuation = await complete(differentModel, context);
+```
+
+## Best Practices
+
+<Steps>
+
+### Choose Appropriate Models
+
+Match models to task requirements:
+
+- **Fast models** (Haiku, GPT-4o-mini) for simple queries
+- **Balanced models** (Sonnet, GPT-5-mini) for general tasks
+- **Powerful models** (Opus, GPT-5) for complex reasoning
+
+### Monitor Costs
+
+Track token usage across providers:
+
+```typescript
+let totalCost = 0;
+
+session.subscribe((event) => {
+  if (event.type === "agent_end") {
+    for (const msg of event.messages) {
+      if (msg.role === "assistant") {
+        totalCost += msg.usage.cost.total;
+      }
+    }
+    console.log(`Total cost: $${totalCost.toFixed(4)}`);
+  }
+});
+```
+
+### Handle Provider-Specific Features
+
+Be aware of feature differences:
+
+- **Thinking/reasoning** - Not all models support it
+- **Vision** - Check `model.input.includes('image')`
+- **Context window** - Different models have different limits
+- **Tool calling** - All Pi-supported models support tools
+
+### Test Cross-Provider Flows
+
+Validate that your workflows work across providers:
+
+```typescript
+const providers = [
+  getModel("anthropic", "claude-sonnet-4-5"),
+  getModel("openai", "gpt-5-mini"),
+  getModel("google", "gemini-2.5-flash"),
+];
+
+for (const provider of providers) {
+  const { session } = await createAgentSession({ model: provider });
+  await session.prompt("Test prompt");
+  // Verify behavior
+}
+```
+
+</Steps>
+
+## Example: Multi-Stage Workflow
+
+Here's a complete example showing a multi-stage workflow with different models:
+
+```typescript
+import { getModel } from "@mariozechner/pi-ai";
+import {
+  createAgentSession,
+  AuthStorage,
+  ModelRegistry,
+} from "@mariozechner/pi-coding-agent";
+
+const authStorage = AuthStorage.create();
+const modelRegistry = new ModelRegistry(authStorage);
+
+// Stage 1: Fast scan with Haiku
+const haiku = getModel("anthropic", "claude-haiku-4-5");
+const { session } = await createAgentSession({
+  model: haiku,
+  authStorage,
+  modelRegistry,
+});
+
+console.log("Stage 1: Quick scan with Haiku");
+await session.prompt("Find all authentication-related files");
+
+// Stage 2: Deep analysis with Sonnet + thinking
+const sonnet = getModel("anthropic", "claude-sonnet-4-5");
+await session.setModel(sonnet);
+session.setThinkingLevel("high");
+
+console.log("Stage 2: Analysis with Sonnet + thinking");
+await session.prompt("Analyze these files for security vulnerabilities");
+
+// Stage 3: Implementation with GPT-5 Codex
+const codex = getModel("openai-codex", "gpt-5-codex");
+await session.setModel(codex);
+
+console.log("Stage 3: Implementation with Codex");
+await session.prompt("Implement fixes for the vulnerabilities found");
+
+// Stage 4: Review with Opus
+const opus = getModel("anthropic", "claude-opus-4-5");
+await session.setModel(opus);
+
+console.log("Stage 4: Final review with Opus");
+await session.prompt("Review the implementation for correctness");
+
+console.log("Workflow complete!");
+```
+
+## Next Steps
+
+- See [Programmatic Usage](/guides/programmatic-usage) for SDK basics
+- See [Building Extensions](/guides/building-extensions) for custom tools
+- See [Custom Providers](/guides/custom-providers) for adding new providers

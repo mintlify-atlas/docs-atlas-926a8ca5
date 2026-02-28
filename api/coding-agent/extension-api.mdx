@@ -1,0 +1,276 @@
+---
+title: ExtensionAPI
+description: API interface provided to extensions for interacting with the agent
+---
+
+The `ExtensionAPI` interface provides extensions with methods to interact with the agent, register tools and commands, and respond to events.
+
+## Import
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+```
+
+## Interface
+
+Extensions receive the `ExtensionAPI` through the `ExtensionContext` when they are initialized.
+
+```typescript
+export interface Extension {
+  init(context: ExtensionContext): Promise<void> | void;
+}
+
+interface ExtensionContext {
+  api: ExtensionAPI;
+  actions: ExtensionActions;
+}
+```
+
+## Methods
+
+### registerTool
+
+Register a custom tool that the agent can invoke.
+
+```typescript
+registerTool(tool: ToolDefinition): void
+```
+
+<ParamField path="tool" type="ToolDefinition" required>
+  <Expandable title="properties">
+    <ParamField path="name" type="string" required>
+      Unique tool name
+    </ParamField>
+    
+    <ParamField path="label" type="string" required>
+      Display label for the tool
+    </ParamField>
+    
+    <ParamField path="description" type="string" required>
+      Description sent to the LLM
+    </ParamField>
+    
+    <ParamField path="parameters" type="TSchema" required>
+      TypeBox schema for tool parameters
+    </ParamField>
+    
+    <ParamField path="execute" type="function" required>
+      Function that executes the tool. Receives `(toolCallId, args, signal?)` and returns `{ content, details }`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### registerCommand
+
+Register a slash command that users can invoke.
+
+```typescript
+registerCommand(command: RegisteredCommand): void
+```
+
+<ParamField path="command" type="RegisteredCommand" required>
+  <Expandable title="properties">
+    <ParamField path="name" type="string" required>
+      Command name (without leading slash)
+    </ParamField>
+    
+    <ParamField path="description" type="string" required>
+      Description shown in autocomplete
+    </ParamField>
+    
+    <ParamField path="shortcut" type="string">
+      Keyboard shortcut (e.g., "ctrl+k")
+    </ParamField>
+    
+    <ParamField path="handler" type="function" required>
+      Function that executes the command. Receives `ExtensionCommandContext`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### on
+
+Subscribe to extension events.
+
+```typescript
+on<T extends ExtensionEvent>(type: T['type'], handler: ExtensionHandler<T>): void
+```
+
+<ParamField path="type" type="string" required>
+  Event type to subscribe to (e.g., "tool_call", "session_start")
+</ParamField>
+
+<ParamField path="handler" type="function" required>
+  Event handler function
+</ParamField>
+
+**Available Events:**
+- `agent_start` / `agent_end` - Agent turn lifecycle
+- `tool_call` / `tool_result` - Tool invocation
+- `session_start` / `session_shutdown` - Session lifecycle
+- `session_compact` / `session_fork` / `session_switch` - Session operations
+- `input` - User input events
+- `turn_start` / `turn_end` - Turn boundaries
+
+### exec
+
+Execute a bash command.
+
+```typescript
+exec(command: string, options?: ExecOptions): Promise<ExecResult>
+```
+
+<ParamField path="command" type="string" required>
+  The bash command to execute
+</ParamField>
+
+<ParamField path="options" type="ExecOptions">
+  <Expandable title="properties">
+    <ParamField path="cwd" type="string">
+      Working directory for command execution
+    </ParamField>
+    
+    <ParamField path="signal" type="AbortSignal">
+      Abort signal for cancellation
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="ExecResult" type="object">
+  <Expandable title="properties">
+    <ResponseField name="stdout" type="string">
+      Standard output from the command
+    </ResponseField>
+    
+    <ResponseField name="stderr" type="string">
+      Standard error from the command
+    </ResponseField>
+    
+    <ResponseField name="exitCode" type="number">
+      Exit code (0 for success)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### showDialog
+
+Display a dialog to the user (TUI only).
+
+```typescript
+showDialog(options: ExtensionUIDialogOptions): Promise<string | undefined>
+```
+
+<ParamField path="options" type="ExtensionUIDialogOptions" required>
+  <Expandable title="properties">
+    <ParamField path="title" type="string" required>
+      Dialog title
+    </ParamField>
+    
+    <ParamField path="component" type="Component" required>
+      TUI component to render
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### showWidget
+
+Show a persistent widget in the footer (TUI only).
+
+```typescript
+showWidget(options: ExtensionWidgetOptions): void
+```
+
+<ParamField path="options" type="ExtensionWidgetOptions" required>
+  <Expandable title="properties">
+    <ParamField path="id" type="string" required>
+      Unique widget ID
+    </ParamField>
+    
+    <ParamField path="component" type="Component" required>
+      TUI component to render
+    </ParamField>
+    
+    <ParamField path="placement" type="'left' | 'right'">
+      Widget placement in footer. Default: `'right'`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Example
+
+```typescript
+import type { Extension, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+
+export const myExtension: Extension = {
+  async init(context: ExtensionContext) {
+    const { api } = context;
+    
+    // Register a custom tool
+    api.registerTool({
+      name: "get_time",
+      label: "Get Time",
+      description: "Get the current time",
+      parameters: Type.Object({}),
+      execute: async () => {
+        return {
+          content: [{ type: "text", text: new Date().toISOString() }],
+          details: {},
+        };
+      },
+    });
+    
+    // Register a slash command
+    api.registerCommand({
+      name: "time",
+      description: "Insert current time",
+      shortcut: "ctrl+t",
+      handler: async (ctx) => {
+        const time = new Date().toISOString();
+        await ctx.actions.sendMessage(time);
+      },
+    });
+    
+    // Subscribe to events
+    api.on("tool_call", (event) => {
+      console.log(`Tool called: ${event.toolName}`);
+    });
+  },
+};
+```
+
+## ExtensionActions
+
+The `ExtensionActions` interface provides methods for modifying agent state.
+
+### sendMessage
+
+Send a user message to the agent.
+
+```typescript
+sendMessage(text: string): Promise<void>
+```
+
+### setModel
+
+Change the active model.
+
+```typescript
+setModel(model: Model, thinkingLevel?: ThinkingLevel): void
+```
+
+### setThinkingLevel
+
+Change the thinking level.
+
+```typescript
+setThinkingLevel(level: ThinkingLevel): void
+```
+
+### setActiveTools
+
+Set which tools are currently active.
+
+```typescript
+setActiveTools(toolNames: string[]): void
+```

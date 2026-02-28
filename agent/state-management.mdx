@@ -1,0 +1,296 @@
+---
+title: State Management
+description: Managing agent state, messages, and queues
+---
+
+The agent maintains stateful context across turns, including messages, tools, model configuration, and message queues for steering and follow-up.
+
+## Agent State
+
+The agent exposes its state via `agent.state`:
+
+```typescript
+interface AgentState {
+  systemPrompt: string;
+  model: Model<any>;
+  thinkingLevel: ThinkingLevel;
+  tools: AgentTool<any>[];
+  messages: AgentMessage[];
+  isStreaming: boolean;
+  streamMessage: AgentMessage | null;  // Current partial during streaming
+  pendingToolCalls: Set<string>;
+  error?: string;
+}
+```
+
+## State Mutations
+
+### System Prompt
+
+```typescript
+agent.setSystemPrompt("You are a helpful coding assistant.");
+
+const currentPrompt = agent.state.systemPrompt;
+```
+
+### Model Selection
+
+```typescript
+import { getModel } from "@mariozechner/pi-ai";
+
+agent.setModel(getModel("openai", "gpt-4o"));
+
+const currentModel = agent.state.model;
+```
+
+### Thinking Level
+
+```typescript
+agent.setThinkingLevel("high");
+
+const level = agent.state.thinkingLevel;
+```
+
+### Tools
+
+```typescript
+agent.setTools([readFileTool, writeFileTool]);
+
+const tools = agent.state.tools;
+```
+
+### Thinking Budgets
+
+Configure token budgets for thinking levels:
+
+```typescript
+agent.thinkingBudgets = {
+  minimal: 128,
+  low: 512,
+  medium: 1024,
+  high: 2048,
+  xhigh: 4096,
+};
+```
+
+## Message Management
+
+### Adding Messages
+
+```typescript
+// Append a single message
+agent.appendMessage({
+  role: "user",
+  content: "Hello",
+  timestamp: Date.now(),
+});
+
+// Replace all messages
+agent.replaceMessages([
+  { role: "user", content: "New conversation", timestamp: Date.now() },
+]);
+
+// Clear all messages
+agent.clearMessages();
+```
+
+### Accessing Messages
+
+```typescript
+const messages = agent.state.messages;
+
+// During streaming, partial message is in streamMessage
+if (agent.state.isStreaming) {
+  const partial = agent.state.streamMessage;
+}
+```
+
+## Message Queues
+
+The agent supports two types of queued messages:
+
+### Steering Messages
+
+**Steering** messages interrupt the agent while tools are running:
+
+```typescript
+// Set delivery mode
+agent.setSteeringMode("one-at-a-time"); // or "all"
+
+// Queue a steering message
+agent.steer({
+  role: "user",
+  content: "Stop! Do this instead.",
+  timestamp: Date.now(),
+});
+
+// Clear steering queue
+agent.clearSteeringQueue();
+```
+
+When steering messages are detected:
+1. Remaining tools are skipped with error results
+2. Steering messages are injected
+3. LLM responds to the interruption
+
+### Follow-up Messages
+
+**Follow-up** messages queue work after the agent would otherwise stop:
+
+```typescript
+// Set delivery mode
+agent.setFollowUpMode("one-at-a-time"); // or "all"
+
+// Queue a follow-up message
+agent.followUp({
+  role: "user",
+  content: "Also summarize the result.",
+  timestamp: Date.now(),
+});
+
+// Clear follow-up queue
+agent.clearFollowUpQueue();
+```
+
+Follow-up messages are checked when:
+- There are no more tool calls
+- No steering messages are queued
+
+If any follow-up messages exist, they're injected and another turn runs.
+
+### Delivery Modes
+
+<Tabs>
+  <Tab title="one-at-a-time">
+    Deliver one message, wait for response, then deliver the next.
+    
+    ```typescript
+    agent.setSteeringMode("one-at-a-time");
+    agent.setFollowUpMode("one-at-a-time");
+    ```
+  </Tab>
+  <Tab title="all">
+    Deliver all queued messages at once.
+    
+    ```typescript
+    agent.setSteeringMode("all");
+    agent.setFollowUpMode("all");
+    ```
+  </Tab>
+</Tabs>
+
+### Clearing Queues
+
+```typescript
+// Clear specific queue
+agent.clearSteeringQueue();
+agent.clearFollowUpQueue();
+
+// Clear all queues
+agent.clearAllQueues();
+```
+
+## Custom Message Types
+
+Extend `AgentMessage` for app-specific types:
+
+```typescript
+declare module "@mariozechner/pi-agent-core" {
+  interface CustomAgentMessages {
+    notification: {
+      role: "notification";
+      text: string;
+      level: "info" | "warning" | "error";
+      timestamp: number;
+    };
+    file_attachment: {
+      role: "file_attachment";
+      path: string;
+      content: string;
+      timestamp: number;
+    };
+  }
+}
+
+// Now valid
+const msg: AgentMessage = {
+  role: "notification",
+  text: "File saved",
+  level: "info",
+  timestamp: Date.now(),
+};
+```
+
+Handle custom types in `convertToLlm`:
+
+```typescript
+const agent = new Agent({
+  convertToLlm: (messages) => messages.flatMap(m => {
+    // Filter out UI-only messages
+    if (m.role === "notification") return [];
+    
+    // Convert file attachments to user messages
+    if (m.role === "file_attachment") {
+      return [{
+        role: "user",
+        content: `File: ${m.path}\n\n${m.content}`,
+        timestamp: m.timestamp,
+      }];
+    }
+    
+    return [m];
+  }),
+});
+```
+
+## Context Transformation
+
+Transform the context before sending to the LLM:
+
+```typescript
+const agent = new Agent({
+  transformContext: async (messages, signal) => {
+    // Prune old messages
+    const recent = messages.slice(-50);
+    
+    // Inject external context
+    const context = await fetchRelevantContext();
+    return [
+      { role: "user", content: context, timestamp: Date.now() },
+      ...recent,
+    ];
+  },
+});
+```
+
+## Reset and Control
+
+```typescript
+// Reset all state
+agent.reset();
+
+// Abort current operation
+agent.abort();
+
+// Wait for idle state
+await agent.waitForIdle();
+
+// Check streaming status
+if (agent.state.isStreaming) {
+  console.log("Agent is processing...");
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Agent Overview" icon="robot" href="/agent/overview">
+    Core agent concepts
+  </Card>
+  <Card title="Transport" icon="exchange" href="/agent/transport">
+    Custom backends and proxies
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/agent/core">
+    Complete Agent API
+  </Card>
+</CardGroup>

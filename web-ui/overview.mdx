@@ -1,0 +1,257 @@
+---
+title: Web UI Overview
+description: Reusable web components for AI chat interfaces
+---
+
+The `@mariozechner/pi-web-ui` package provides reusable web components for building AI chat interfaces powered by the Pi agent runtime.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Chat UI" icon="messages">
+    Complete interface with streaming and tool execution
+  </Card>
+  <Card title="Attachments" icon="paperclip">
+    PDF, DOCX, XLSX, images with text extraction
+  </Card>
+  <Card title="Artifacts" icon="cube">
+    Interactive HTML, SVG, Markdown with sandboxed execution
+  </Card>
+  <Card title="Storage" icon="database">
+    IndexedDB-backed sessions and settings
+  </Card>
+</CardGroup>
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @mariozechner/pi-web-ui @mariozechner/pi-agent-core @mariozechner/pi-ai
+```
+
+```bash yarn
+yarn add @mariozechner/pi-web-ui @mariozechner/pi-agent-core @mariozechner/pi-ai
+```
+
+```bash pnpm
+pnpm add @mariozechner/pi-web-ui @mariozechner/pi-agent-core @mariozechner/pi-ai
+```
+</CodeGroup>
+
+## Quick Start
+
+```typescript
+import { Agent } from '@mariozechner/pi-agent-core';
+import { getModel } from '@mariozechner/pi-ai';
+import {
+  ChatPanel,
+  AppStorage,
+  IndexedDBStorageBackend,
+  setAppStorage,
+  defaultConvertToLlm,
+  ApiKeyPromptDialog,
+} from '@mariozechner/pi-web-ui';
+import '@mariozechner/pi-web-ui/app.css';
+
+// Set up storage
+const storage = AppStorage.create();
+await storage.init();
+setAppStorage(storage);
+
+// Create agent
+const agent = new Agent({
+  initialState: {
+    systemPrompt: 'You are a helpful assistant.',
+    model: getModel('anthropic', 'claude-sonnet-4-5-20250929'),
+    thinkingLevel: 'off',
+    messages: [],
+    tools: [],
+  },
+  convertToLlm: defaultConvertToLlm,
+});
+
+// Create chat panel
+const chatPanel = new ChatPanel();
+await chatPanel.setAgent(agent, {
+  onApiKeyRequired: (provider) => ApiKeyPromptDialog.prompt(provider),
+});
+
+document.body.appendChild(chatPanel);
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────┐
+│           ChatPanel                      │
+│  ┌─────────────────────────────────┐  │
+│  │   AgentInterface (messages)   │  │
+│  │   ArtifactsPanel (HTML/SVG)   │  │
+│  └─────────────────────────────────┘  │
+└─────────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────┐
+│    Agent (pi-agent-core)           │
+│    - State management               │
+│    - Tool execution                 │
+│    - Event streaming                │
+└─────────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────┐
+│         AppStorage                  │
+│    - SettingsStore                  │
+│    - ProviderKeysStore              │
+│    - SessionsStore                  │
+│    - CustomProvidersStore           │
+└─────────────────────────────────────┘
+```
+
+## Core Components
+
+### ChatPanel
+
+High-level chat interface:
+
+```typescript
+const chatPanel = new ChatPanel();
+await chatPanel.setAgent(agent, {
+  onApiKeyRequired: async (provider) => ApiKeyPromptDialog.prompt(provider),
+  onBeforeSend: async () => { /* save draft */ },
+  toolsFactory: (agent, agentInterface, artifactsPanel, runtimeProvidersFactory) => [
+    createJavaScriptReplTool(),
+  ],
+});
+```
+
+### AgentInterface
+
+Lower-level chat interface for custom layouts:
+
+```typescript
+const chat = document.createElement('agent-interface') as AgentInterface;
+chat.session = agent;
+chat.enableAttachments = true;
+chat.enableModelSelector = true;
+chat.onApiKeyRequired = async (provider) => { /* ... */ };
+```
+
+## Built-in Tools
+
+### JavaScript REPL
+
+Execute JavaScript in sandboxed environment:
+
+```typescript
+import { createJavaScriptReplTool } from '@mariozechner/pi-web-ui';
+
+const replTool = createJavaScriptReplTool();
+agent.setTools([replTool]);
+```
+
+### Extract Document
+
+Extract text from documents at URLs:
+
+```typescript
+import { createExtractDocumentTool } from '@mariozechner/pi-web-ui';
+
+const extractTool = createExtractDocumentTool();
+extractTool.corsProxyUrl = 'https://corsproxy.io/?';
+agent.setTools([extractTool]);
+```
+
+### Artifacts
+
+Built into ArtifactsPanel:
+
+```typescript
+const artifactsPanel = new ArtifactsPanel();
+artifactsPanel.agent = agent;
+agent.setTools([artifactsPanel.tool]);
+```
+
+## Storage
+
+### AppStorage
+
+Centralized storage management:
+
+```typescript
+const storage = AppStorage.create();
+await storage.init();
+setAppStorage(storage);
+
+// Settings
+await storage.settings.set('proxy.enabled', true);
+const enabled = await storage.settings.get<boolean>('proxy.enabled');
+
+// API Keys
+await storage.providerKeys.set('anthropic', 'sk-ant-...');
+const key = await storage.providerKeys.get('anthropic');
+
+// Sessions
+await storage.sessions.save(sessionData, metadata);
+const data = await storage.sessions.get(sessionId);
+```
+
+## Message Types
+
+### UserMessageWithAttachments
+
+User message with files:
+
+```typescript
+const message: UserMessageWithAttachments = {
+  role: 'user-with-attachments',
+  content: 'Analyze this document',
+  attachments: [pdfAttachment],
+  timestamp: Date.now(),
+};
+```
+
+### ArtifactMessage
+
+For artifact persistence:
+
+```typescript
+const artifact: ArtifactMessage = {
+  role: 'artifact',
+  action: 'create',
+  filename: 'chart.html',
+  content: '<div>...</div>',
+  timestamp: new Date().toISOString(),
+};
+```
+
+## Styling
+
+Import pre-built CSS:
+
+```typescript
+import '@mariozechner/pi-web-ui/app.css';
+```
+
+Or use with Tailwind:
+
+```css
+@import '@mariozechner/mini-lit/themes/claude.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Components" icon="cube" href="/web-ui/components">
+    Explore web UI components
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/web-ui/components">
+    Complete API documentation
+  </Card>
+  <Card title="Example App" icon="github" href="https://github.com/badlogic/pi-mono/tree/main/packages/web-ui/example">
+    View complete example application
+  </Card>
+</CardGroup>

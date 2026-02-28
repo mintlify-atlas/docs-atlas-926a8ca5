@@ -1,0 +1,140 @@
+---
+title: Agent Core Overview
+description: Stateful agent runtime with tool execution and event streaming
+---
+
+The `@mariozechner/pi-agent-core` package provides a stateful agent runtime built on top of the unified LLM API. It handles tool execution, message queuing, and streaming events for building interactive AI agents.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Stateful Runtime" icon="memory">
+    Manages conversation state, tools, and model configuration
+  </Card>
+  <Card title="Tool Execution" icon="wrench">
+    Automatic tool calling with validation and error handling
+  </Card>
+  <Card title="Event Streaming" icon="broadcast-tower">
+    Real-time events for UI updates during agent operations
+  </Card>
+  <Card title="Message Queuing" icon="list">
+    Steering and follow-up message queues for interruptions
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+<CodeGroup>
+```typescript Basic Usage
+import { Agent } from "@mariozechner/pi-agent-core";
+import { getModel } from "@mariozechner/pi-ai";
+
+const agent = new Agent({
+  initialState: {
+    systemPrompt: "You are a helpful assistant.",
+    model: getModel("anthropic", "claude-sonnet-4-20250514"),
+  },
+});
+
+agent.subscribe((event) => {
+  if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+    process.stdout.write(event.assistantMessageEvent.delta);
+  }
+});
+
+await agent.prompt("Hello!");
+```
+
+```typescript With Tools
+import { Type } from "@sinclair/typebox";
+
+const readFileTool = {
+  name: "read_file",
+  label: "Read File",
+  description: "Read a file's contents",
+  parameters: Type.Object({
+    path: Type.String({ description: "File path" }),
+  }),
+  execute: async (toolCallId, params) => {
+    const content = await fs.readFile(params.path, "utf-8");
+    return {
+      content: [{ type: "text", text: content }],
+      details: { path: params.path },
+    };
+  },
+};
+
+agent.setTools([readFileTool]);
+```
+</CodeGroup>
+
+## Core Concepts
+
+### Agent State
+
+The agent maintains state including:
+- **System prompt** - Instructions for the LLM
+- **Model** - Active LLM model
+- **Thinking level** - Reasoning depth
+- **Tools** - Available functions
+- **Messages** - Conversation history
+- **Stream status** - Current streaming state
+
+### Message Types
+
+The agent works with `AgentMessage`, which can include:
+- Standard LLM messages (`user`, `assistant`, `toolResult`)
+- Custom app-specific message types via declaration merging
+
+The `convertToLlm` function filters and transforms messages before LLM calls.
+
+### Event Flow
+
+The agent emits granular events for UI updates:
+
+```
+prompt("Hello")
+├─ agent_start
+├─ turn_start
+├─ message_start { userMessage }
+├─ message_end { userMessage }
+├─ message_start { assistantMessage }
+├─ message_update { partial... }
+├─ message_end { assistantMessage }
+├─ turn_end
+└─ agent_end
+```
+
+<Tip>
+See the [Transport](/agent/transport) and [State Management](/agent/state-management) pages for more details on advanced features.
+</Tip>
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @mariozechner/pi-agent-core
+```
+
+```bash yarn
+yarn add @mariozechner/pi-agent-core
+```
+
+```bash pnpm
+pnpm add @mariozechner/pi-agent-core
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Transport" icon="exchange" href="/agent/transport">
+    Custom backends and proxy usage
+  </Card>
+  <Card title="State Management" icon="database" href="/agent/state-management">
+    Managing agent state and message queues
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/agent/core">
+    Complete Agent class API documentation
+  </Card>
+</CardGroup>

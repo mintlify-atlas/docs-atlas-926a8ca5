@@ -1,0 +1,769 @@
+---
+title: Extensibility System
+description: Extensions, skills, prompt templates, and customization in Pi
+---
+
+# Extensibility System
+
+Pi's extensibility system allows you to customize and extend its behavior without forking the codebase. The system provides four primary extension mechanisms: **Extensions**, **Skills**, **Prompt Templates**, and **Themes**.
+
+## Extension Mechanisms
+
+| Mechanism | Format | Purpose | Access Level |
+|-----------|--------|---------|-------------|
+| **Extensions** | TypeScript/JavaScript | Full agent customization | Complete (tools, events, UI, commands) |
+| **Skills** | Markdown | Task-specific instructions | Read-only (instructions for agent) |
+| **Prompt Templates** | Markdown | Reusable prompts | Text substitution |
+| **Themes** | JSON | UI customization | Visual styling |
+
+---
+
+## Extensions
+
+Extensions are TypeScript or JavaScript modules that receive full access to the agent's lifecycle, allowing you to:
+
+- Subscribe to lifecycle events
+- Register LLM-callable tools
+- Add slash commands
+- Define keyboard shortcuts
+- Customize the UI
+- Modify context before LLM calls
+- Intercept tool executions
+
+### Extension Structure
+
+An extension is a module that exports a factory function:
+
+```typescript
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent/hooks';
+import { Type } from '@sinclair/typebox';
+
+export default async (pi: ExtensionAPI) => {
+  // Extension initialization code
+  console.log('Extension loaded!');
+  
+  // Subscribe to events, register tools, etc.
+};
+```
+
+### Discovery and Loading
+
+Extensions are discovered from:
+
+1. **Global**: `~/.pi/agent/extensions/`
+2. **Project**: `.pi/extensions/`
+3. **Explicit**: `--extension path/to/extension.ts`
+
+**Discovery rules**:
+- Direct `.ts` or `.js` files in the extensions directory
+- Subdirectories with `index.ts` or `index.js`
+- Subdirectories with `package.json` containing a `pi.extensions` field
+
+<CodeGroup>
+```bash Direct File
+~/.pi/agent/extensions/
+  my-extension.ts        # ✓ Discovered
+```
+
+```bash Index File
+~/.pi/agent/extensions/
+  my-extension/
+    index.ts             # ✓ Discovered
+    utils.ts
+```
+
+```json Package Manifest
+// .pi/extensions/my-package/package.json
+{
+  "pi": {
+    "extensions": ["src/extension.ts"]
+  }
+}
+```
+</CodeGroup>
+
+### Extension API Reference
+
+The `ExtensionAPI` provides methods for registering functionality and accessing the agent:
+
+#### Event Subscription
+
+```typescript
+pi.on('session_start', async (event, ctx) => {
+  console.log('Session started');
+});
+
+pi.on('message_update', async (event, ctx) => {
+  if (event.assistantMessageEvent.type === 'text_delta') {
+    // Stream text to external logger
+  }
+});
+
+pi.on('tool_call', async (event, ctx) => {
+  // Block or log tool calls
+  if (event.toolName === 'bash' && event.input.command.includes('rm -rf')) {
+    return { block: true, reason: 'Dangerous command blocked' };
+  }
+});
+```
+
+**Key event types**:
+- `session_start`, `session_switch`, `session_compact`
+- `agent_start`, `agent_end`
+- `turn_start`, `turn_end`
+- `message_start`, `message_update`, `message_end`
+- `tool_execution_start`, `tool_execution_update`, `tool_execution_end`
+- `tool_call`, `tool_result` (interceptors)
+- `context` (modify messages before LLM)
+- `model_select`, `input`
+
+#### Tool Registration
+
+```typescript
+pi.registerTool({
+  name: 'search_docs',
+  label: 'Search Documentation',
+  description: 'Search project documentation',
+  parameters: Type.Object({
+    query: Type.String({ description: 'Search query' }),
+    limit: Type.Optional(Type.Number({ default: 10 }))
+  }),
+  
+  execute: async (toolCallId, params, signal, onUpdate, ctx) => {
+    // Stream progress updates
+    onUpdate?.({
+      content: [{ type: 'text', text: 'Searching...' }],
+      details: { progress: 0.5 }
+    });
+    
+    const results = await searchDocs(params.query, params.limit);
+    
+    return {
+      content: [{ type: 'text', text: JSON.stringify(results) }],
+      details: { resultCount: results.length }
+    };
+  },
+  
+  // Optional: Custom rendering
+  renderResult: (result, options, theme) => {
+    // Return a TUI Component for custom display
+  }
+});
+```
+
+#### Command Registration
+
+```typescript
+pi.registerCommand('deploy', {
+  description: 'Deploy the application',
+  
+  getArgumentCompletions: (prefix) => {
+    return [
+      { label: 'staging', description: 'Deploy to staging' },
+      { label: 'production', description: 'Deploy to production' }
+    ];
+  },
+  
+  handler: async (args, ctx) => {
+    const target = args.trim() || 'staging';
+    
+    ctx.ui.notify(`Deploying to ${target}...`);
+    
+    // Use ctx to access agent state
+    await ctx.waitForIdle();
+    
+    // Send a message to the agent
+    pi.sendUserMessage(`Deploy to ${target} completed`);
+  }
+});
+```
+
+#### Keyboard Shortcuts
+
+```typescript
+pi.registerShortcut('ctrl+shift+d', {
+  description: 'Toggle debug mode',
+  handler: async (ctx) => {
+    debugMode = !debugMode;
+    ctx.ui.notify(`Debug mode: ${debugMode ? 'ON' : 'OFF'}`);
+  }
+});
+```
+
+#### UI Customization
+
+```typescript
+pi.on('session_start', async (event, ctx) => {
+  // Set a status indicator
+  ctx.ui.setStatus('git-branch', 'main');
+  
+  // Add a custom widget
+  ctx.ui.setWidget('my-widget', [
+    'Custom widget content',
+    'Line 2'
+  ], { placement: 'aboveEditor' });
+  
+  // Or use a component factory
+  ctx.ui.setWidget('my-component', (tui, theme) => {
+    return new MyCustomComponent(tui, theme);
+  });
+});
+```
+
+#### Provider Registration
+
+```typescript
+pi.registerProvider('my-proxy', {
+  baseUrl: 'https://proxy.example.com',
+  apiKey: 'PROXY_API_KEY',
+  api: 'anthropic-messages',
+  models: [
+    {
+      id: 'claude-sonnet-4',
+      name: 'Claude 4 Sonnet (Proxied)',
+      reasoning: true,
+      input: ['text', 'image'],
+      cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+      contextWindow: 200000,
+      maxTokens: 8192
+    }
+  ]
+});
+```
+
+### Extension Context
+
+The context object (`ctx`) passed to event handlers provides:
+
+```typescript
+interface ExtensionContext {
+  // UI methods
+  ui: ExtensionUIContext;
+  hasUI: boolean;
+  
+  // State
+  cwd: string;
+  sessionManager: ReadonlySessionManager;
+  model: Model<any> | undefined;
+  
+  // Control
+  isIdle(): boolean;
+  abort(): void;
+  shutdown(): void;
+  
+  // Context management
+  getContextUsage(): ContextUsage | undefined;
+  compact(options?: CompactOptions): void;
+  getSystemPrompt(): string;
+}
+
+// Extended context for commands
+interface ExtensionCommandContext extends ExtensionContext {
+  waitForIdle(): Promise<void>;
+  newSession(): Promise<{ cancelled: boolean }>;
+  fork(entryId: string): Promise<{ cancelled: boolean }>;
+  navigateTree(targetId: string): Promise<{ cancelled: boolean }>;
+  switchSession(sessionPath: string): Promise<{ cancelled: boolean }>;
+  reload(): Promise<void>;
+}
+```
+
+### Extension Patterns
+
+<Accordion title="Pattern: Custom Tool with UI">
+```typescript
+export default async (pi: ExtensionAPI) => {
+  pi.registerTool({
+    name: 'analyze_codebase',
+    label: 'Analyze Codebase',
+    description: 'Analyze project structure and dependencies',
+    parameters: Type.Object({
+      path: Type.String({ description: 'Project path' })
+    }),
+    
+    execute: async (id, params, signal, onUpdate, ctx) => {
+      // Show progress in UI
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        onUpdate?.({
+          content: [{ type: 'text', text: `Analyzing... ${progress}%` }],
+          details: { progress: progress / 100 }
+        });
+      }, 500);
+      
+      signal?.addEventListener('abort', () => clearInterval(interval));
+      
+      try {
+        const analysis = await analyzeProject(params.path);
+        clearInterval(interval);
+        
+        return {
+          content: [{ type: 'text', text: JSON.stringify(analysis, null, 2) }],
+          details: analysis
+        };
+      } catch (error) {
+        clearInterval(interval);
+        throw error;
+      }
+    }
+  });
+};
+```
+</Accordion>
+
+<Accordion title="Pattern: Context Modification">
+```typescript
+export default async (pi: ExtensionAPI) => {
+  // Inject project context before every LLM call
+  pi.on('context', async (event, ctx) => {
+    const projectInfo = await getProjectInfo(ctx.cwd);
+    
+    // Prepend a system message
+    return {
+      messages: [
+        {
+          role: 'system' as const,
+          content: `Project: ${projectInfo.name}\nStack: ${projectInfo.stack}`,
+          timestamp: Date.now()
+        },
+        ...event.messages
+      ]
+    };
+  });
+};
+```
+</Accordion>
+
+<Accordion title="Pattern: Monitoring Extension">
+```typescript
+export default async (pi: ExtensionAPI) => {
+  let sessionStart = 0;
+  let tokenCount = { input: 0, output: 0 };
+  
+  pi.on('session_start', async (event, ctx) => {
+    sessionStart = Date.now();
+    tokenCount = { input: 0, output: 0 };
+  });
+  
+  pi.on('turn_end', async (event, ctx) => {
+    const usage = event.message.usage;
+    if (usage) {
+      tokenCount.input += usage.input;
+      tokenCount.output += usage.output;
+      
+      const elapsed = Math.floor((Date.now() - sessionStart) / 1000);
+      ctx.ui.setStatus('session-stats', 
+        `${elapsed}s | ${tokenCount.input + tokenCount.output} tokens`
+      );
+    }
+  });
+};
+```
+</Accordion>
+
+---
+
+## Skills
+
+Skills are markdown files that provide task-specific instructions to the agent. They're discovered automatically and presented in the system prompt or loaded explicitly via `/skill` commands.
+
+### Skill Structure
+
+```markdown
+---
+name: git-workflow
+description: Follow best practices for Git workflows
+---
+
+# Git Workflow Instructions
+
+When working with Git:
+
+1. **Before making changes**: Always check current branch and status
+   ```bash
+   git status
+   git branch
+   ```
+
+2. **Commit messages**: Use conventional commits format
+   - feat: New feature
+   - fix: Bug fix
+   - docs: Documentation
+   - refactor: Code restructuring
+
+3. **Before pushing**: Review changes
+   ```bash
+   git diff --staged
+   ```
+```
+
+### Skill Discovery
+
+Skills are loaded from:
+
+1. **Global**: `~/.pi/agent/skills/`
+2. **Project**: `.pi/skills/`
+3. **Explicit**: `--skill path/to/skill.md`
+
+**Discovery rules**:
+- Direct `.md` files in root (file name becomes skill name)
+- Subdirectories with `SKILL.md` (directory name becomes skill name)
+- Respects `.gitignore`, `.ignore`, `.fdignore` patterns
+
+**Root Files:**
+
+```bash
+~/.pi/agent/skills/
+  python-debug.md      # Skill name: python-debug
+  git-workflow.md      # Skill name: git-workflow
+```
+
+**Subdirectories:**
+
+```bash
+.pi/skills/
+  docker-deploy/
+    SKILL.md           # Skill name: docker-deploy
+    templates/
+      Dockerfile
+```
+
+### Skill Frontmatter
+
+```yaml
+---
+name: skill-name              # Optional: defaults to file/directory name
+description: Short description # Required: shown in skill list
+disable-model-invocation: true # Optional: prevent auto-loading in prompt
+---
+```
+
+**`disable-model-invocation`**: When true, the skill is NOT automatically added to the system prompt. It can only be loaded explicitly via `/skill:name` commands. Useful for:
+- Large reference documents
+- Context-specific guides
+- Skills that conflict with default behavior
+
+### Using Skills
+
+**Automatic loading**: Skills are presented in the system prompt:
+
+```xml
+The following skills provide specialized instructions for specific tasks.
+Use the read tool to load a skill's file when the task matches its description.
+
+<available_skills>
+  <skill>
+    <name>git-workflow</name>
+    <description>Follow best practices for Git workflows</description>
+    <location>/home/user/.pi/agent/skills/git-workflow.md</location>
+  </skill>
+</available_skills>
+```
+
+**Manual invocation**: Extensions can check for and load skills:
+
+```typescript
+pi.on('input', async (event, ctx) => {
+  if (event.text.startsWith('/skill:')) {
+    const skillName = event.text.slice(7);
+    // Load and inject skill content
+    return { action: 'handled' };
+  }
+});
+```
+
+---
+
+## Prompt Templates
+
+Prompt templates are reusable prompts with argument substitution. They're useful for frequently used prompts or standardized workflows.
+
+### Template Structure
+
+```markdown
+---
+description: Explain code with detailed comments
+---
+
+Read the file at $1 and add detailed comments explaining:
+- What the code does
+- Why it's structured this way
+- Any potential issues or improvements
+
+$ARGUMENTS
+```
+
+### Template Syntax
+
+**Positional arguments**: `$1`, `$2`, `$3`, ...
+
+**All arguments**: `$@` or `$ARGUMENTS`
+
+**Argument slicing**: `${@:N}` or `${@:N:L}`
+- `${@:2}`: All arguments from 2nd onwards
+- `${@:2:3}`: 3 arguments starting from 2nd
+
+<CodeGroup>
+```markdown Example: Code Review
+---
+description: Review code for issues
+---
+
+Review $1 for:
+1. Bugs
+2. Performance issues
+3. Security vulnerabilities
+
+Focus on: $ARGUMENTS
+```
+
+```markdown Example: Refactor
+---
+description: Refactor code to use pattern
+---
+
+Refactor $1 to use $2 pattern.
+
+Additional requirements:
+${@:3}
+```
+</CodeGroup>
+
+### Template Discovery
+
+Templates are loaded from:
+
+1. **Global**: `~/.pi/agent/prompts/`
+2. **Project**: `.pi/prompts/`
+3. **Explicit**: `--prompt path/to/template.md`
+
+**Usage**:
+
+```bash
+# In Pi chat
+/review src/app.ts security performance
+
+# Expands to:
+# Review src/app.ts for:
+# 1. Bugs
+# 2. Performance issues  
+# 3. Security vulnerabilities
+#
+# Focus on: security performance
+```
+
+---
+
+## Themes
+
+Themes customize the visual appearance of Pi's TUI. They're JSON files that define colors and styles.
+
+### Theme Structure
+
+```json
+{
+  "name": "My Theme",
+  "colors": {
+    "primary": "#00ff00",
+    "secondary": "#0088ff",
+    "error": "#ff0000",
+    "warning": "#ffaa00"
+  },
+  "chat": {
+    "userMessageBorder": "blue",
+    "assistantMessageBorder": "green",
+    "toolCallBorder": "yellow"
+  },
+  "editor": {
+    "border": "cyan",
+    "cursor": "white"
+  },
+  "markdown": {
+    "heading": { "fg": "cyan", "bold": true },
+    "code": { "fg": "yellow" },
+    "codeBlockBorder": "gray"
+  }
+}
+```
+
+### Theme Discovery
+
+Themes are loaded from:
+
+1. **Global**: `~/.pi/agent/themes/`
+2. **Project**: `.pi/themes/`
+3. **Built-in**: Shipped with pi-coding-agent
+
+**Usage**:
+
+```bash
+pi --theme my-theme
+# or
+/theme my-theme
+```
+
+---
+
+## Pi Packages
+
+Pi packages bundle extensions, skills, prompts, and themes into a single npm package for distribution.
+
+### Package Structure
+
+```json
+{
+  "name": "pi-package-example",
+  "version": "1.0.0",
+  "pi": {
+    "extensions": ["src/extension.ts"],
+    "skills": ["skills/"],
+    "prompts": ["prompts/"],
+    "themes": ["themes/"]
+  }
+}
+```
+
+### Installation
+
+```bash
+# Via npm
+npm install -g pi-package-example
+
+# Via git
+git clone https://github.com/user/pi-package-example ~/.pi/agent/extensions/example
+```
+
+### Creating a Package
+
+<Steps>
+  <Step title="Initialize package">
+    ```bash
+    mkdir my-pi-package
+    cd my-pi-package
+    npm init -y
+    ```
+  </Step>
+  
+  <Step title="Add package.json pi field">
+    ```json
+    {
+      "pi": {
+        "extensions": ["dist/extension.js"],
+        "skills": ["skills/"],
+        "prompts": ["prompts/"]
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Create extension">
+    ```typescript
+    // src/extension.ts
+    import type { ExtensionAPI } from '@mariozechner/pi-coding-agent/hooks';
+    
+    export default async (pi: ExtensionAPI) => {
+      // Extension code
+    };
+    ```
+  </Step>
+  
+  <Step title="Build and publish">
+    ```bash
+    npm run build
+    npm publish
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Extension Loading
+
+Extensions are loaded using `jiti`, a just-in-time TypeScript compiler. This enables:
+
+- Writing extensions in TypeScript without pre-compilation
+- Hot module reloading during development
+- Support for ES modules and CommonJS
+- Automatic dependency resolution
+
+### Module Resolution
+
+Extensions have access to bundled packages:
+
+- `@mariozechner/pi-coding-agent`
+- `@mariozechner/pi-agent-core`
+- `@mariozechner/pi-ai`
+- `@mariozechner/pi-tui`
+- `@sinclair/typebox`
+
+**Example**:
+
+```typescript
+import { Type } from '@sinclair/typebox';
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent/hooks';
+import { getModel } from '@mariozechner/pi-ai';
+
+export default async (pi: ExtensionAPI) => {
+  // Use bundled packages directly
+};
+```
+
+### Error Handling
+
+Extension errors are caught and logged without crashing Pi:
+
+```
+[Extension Error] my-extension.ts
+Failed to execute handler for 'session_start': TypeError: Cannot read property 'x' of undefined
+```
+
+Check `~/.pi/agent/logs/` for detailed error logs.
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Extension Design">
+    - Keep extensions focused on a single responsibility
+    - Use event handlers for observation, tools for capabilities
+    - Provide clear descriptions for commands and tools
+    - Handle errors gracefully (extensions shouldn't crash Pi)
+    - Use TypeScript for type safety
+  </Accordion>
+  
+  <Accordion title="Skill Writing">
+    - Write clear, actionable instructions
+    - Include code examples where relevant
+    - Keep skills focused on a specific task or domain
+    - Use descriptive names (lowercase, hyphens)
+    - Test skills by invoking manually first
+  </Accordion>
+  
+  <Accordion title="Template Design">
+    - Use positional args for required parameters
+    - Use `$ARGUMENTS` for optional/flexible content
+    - Provide good default behavior
+    - Include examples in the description
+  </Accordion>
+  
+  <Accordion title="Performance">
+    - Avoid expensive operations in frequently-called event handlers
+    - Use `onUpdate` for streaming tool results
+    - Debounce UI updates if needed
+    - Clean up resources in `dispose()` methods
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand the overall system design
+  </Card>
+  
+  <Card title="Packages" icon="box" href="/concepts/packages">
+    Explore package capabilities
+  </Card>
+</CardGroup>

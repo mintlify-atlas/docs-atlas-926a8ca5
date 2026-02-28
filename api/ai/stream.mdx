@@ -1,0 +1,321 @@
+---
+title: Stream Functions
+description: Stream LLM responses with events and completion helpers
+---
+
+The `@mariozechner/pi-ai` package provides functions for streaming LLM responses and awaiting completion results.
+
+## Import
+
+```typescript
+import { stream, streamSimple, complete, completeSimple } from "@mariozechner/pi-ai";
+```
+
+## stream
+
+Stream LLM responses with provider-specific options.
+
+```typescript
+stream<TApi extends Api>(
+  model: Model<TApi>,
+  context: Context,
+  options?: ProviderStreamOptions
+): AssistantMessageEventStream
+```
+
+<ParamField path="model" type="Model<TApi>" required>
+  The model to use for generation
+</ParamField>
+
+<ParamField path="context" type="Context" required>
+  Conversation context with system prompt, messages, and tools
+  
+  <Expandable title="properties">
+    <ParamField path="systemPrompt" type="string" required>
+      System prompt for the model
+    </ParamField>
+    
+    <ParamField path="messages" type="Message[]" required>
+      Conversation messages (user, assistant, tool results)
+    </ParamField>
+    
+    <ParamField path="tools" type="Tool[]">
+      Available tools the model can invoke
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="options" type="ProviderStreamOptions">
+  <Expandable title="properties">
+    <ParamField path="temperature" type="number">
+      Sampling temperature (0-2). Default varies by provider.
+    </ParamField>
+    
+    <ParamField path="maxTokens" type="number">
+      Maximum tokens to generate
+    </ParamField>
+    
+    <ParamField path="apiKey" type="string">
+      API key for authentication
+    </ParamField>
+    
+    <ParamField path="signal" type="AbortSignal">
+      Abort signal for cancellation
+    </ParamField>
+    
+    <ParamField path="transport" type="'sse' | 'websocket' | 'auto'">
+      Transport protocol (for providers that support multiple)
+    </ParamField>
+    
+    <ParamField path="cacheRetention" type="'none' | 'short' | 'long'">
+      Prompt cache retention preference. Default: `'short'`
+    </ParamField>
+    
+    <ParamField path="sessionId" type="string">
+      Session identifier for session-based caching
+    </ParamField>
+    
+    <ParamField path="headers" type="Record<string, string>">
+      Custom HTTP headers
+    </ParamField>
+    
+    <ParamField path="metadata" type="Record<string, unknown>">
+      Provider-specific metadata
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Return Value
+
+Returns an `AssistantMessageEventStream` that emits events:
+
+- `text` - Text content delta
+- `thinking` - Reasoning content (for extended thinking models)
+- `tool_call` - Tool invocation request
+- `usage` - Token usage information
+- `stop` - Generation finished
+- `error` - Error occurred
+
+### Example
+
+```typescript
+import { stream, getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("anthropic", "claude-4.5-sonnet-20250514");
+
+const eventStream = stream(model, {
+  systemPrompt: "You are a helpful assistant.",
+  messages: [
+    { role: "user", content: "What is 2+2?", timestamp: Date.now() }
+  ],
+}, {
+  temperature: 0.7,
+  maxTokens: 1000,
+});
+
+for await (const event of eventStream) {
+  if (event.type === "text") {
+    process.stdout.write(event.delta);
+  } else if (event.type === "stop") {
+    console.log("\nFinished!");
+  }
+}
+```
+
+## streamSimple
+
+Stream LLM responses with unified reasoning parameter.
+
+```typescript
+streamSimple<TApi extends Api>(
+  model: Model<TApi>,
+  context: Context,
+  options?: SimpleStreamOptions
+): AssistantMessageEventStream
+```
+
+Same as `stream()` but accepts a `reasoning` parameter instead of provider-specific thinking options.
+
+<ParamField path="options.reasoning" type="ThinkingLevel">
+  Thinking level: `"off"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, or `"xhigh"`
+  
+  Automatically mapped to provider-specific parameters (e.g., `thinking.type` for OpenAI, `thinking.enabled` for Anthropic).
+</ParamField>
+
+<ParamField path="options.thinkingBudgets" type="ThinkingBudgets">
+  Custom token budgets for thinking levels (token-based providers only)
+  
+  <Expandable title="properties">
+    <ParamField path="minimal" type="number">Token budget for minimal thinking</ParamField>
+    <ParamField path="low" type="number">Token budget for low thinking</ParamField>
+    <ParamField path="medium" type="number">Token budget for medium thinking</ParamField>
+    <ParamField path="high" type="number">Token budget for high thinking</ParamField>
+  </Expandable>
+</ParamField>
+
+### Example
+
+```typescript
+import { streamSimple, getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("openai", "gpt-5.3-codex");
+
+const eventStream = streamSimple(model, {
+  systemPrompt: "You are a coding assistant.",
+  messages: [
+    { role: "user", content: "Write a binary search in TypeScript", timestamp: Date.now() }
+  ],
+}, {
+  reasoning: "medium",  // Maps to thinking.type: "medium"
+  temperature: 0.7,
+});
+
+for await (const event of eventStream) {
+  if (event.type === "thinking") {
+    console.log(`[Thinking] ${event.delta}`);
+  } else if (event.type === "text") {
+    process.stdout.write(event.delta);
+  }
+}
+```
+
+## complete
+
+Wait for the full response from `stream()`.
+
+```typescript
+complete<TApi extends Api>(
+  model: Model<TApi>,
+  context: Context,
+  options?: ProviderStreamOptions
+): Promise<AssistantMessage>
+```
+
+Returns the complete `AssistantMessage` after streaming finishes.
+
+### Example
+
+```typescript
+import { complete, getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("anthropic", "claude-4.5-sonnet-20250514");
+
+const result = await complete(model, {
+  systemPrompt: "You are a helpful assistant.",
+  messages: [
+    { role: "user", content: "Explain quantum computing", timestamp: Date.now() }
+  ],
+});
+
+console.log(result.content); // Full response
+console.log(result.usage);   // Token usage
+```
+
+## completeSimple
+
+Wait for the full response from `streamSimple()`.
+
+```typescript
+completeSimple<TApi extends Api>(
+  model: Model<TApi>,
+  context: Context,
+  options?: SimpleStreamOptions
+): Promise<AssistantMessage>
+```
+
+### Example
+
+```typescript
+import { completeSimple, getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("openai", "gpt-5.3-codex");
+
+const result = await completeSimple(model, {
+  systemPrompt: "You are a coding assistant.",
+  messages: [
+    { role: "user", content: "Write a quicksort", timestamp: Date.now() }
+  ],
+}, {
+  reasoning: "high",
+});
+
+console.log(result.content); // Full response with thinking
+```
+
+## AssistantMessageEventStream
+
+Event stream interface with async iteration and helper methods.
+
+### Methods
+
+#### result
+
+Wait for the complete assistant message.
+
+```typescript
+result(): Promise<AssistantMessage>
+```
+
+#### on
+
+Subscribe to specific event types.
+
+```typescript
+on<T extends AssistantMessageEvent>(
+  type: T['type'],
+  handler: (event: T) => void
+): void
+```
+
+**Event Types:**
+- `text` - Text content delta
+- `thinking` - Thinking content delta
+- `tool_call` - Tool call request
+- `usage` - Token usage
+- `stop` - Stream finished
+- `error` - Error occurred
+
+#### abort
+
+Cancel the stream.
+
+```typescript
+abort(): void
+```
+
+### Example
+
+```typescript
+const eventStream = stream(model, context);
+
+// Subscribe to events
+eventStream.on("text", (event) => {
+  console.log("Text:", event.delta);
+});
+
+eventStream.on("usage", (event) => {
+  console.log("Tokens:", event.usage);
+});
+
+// Await result
+const message = await eventStream.result();
+console.log("Final:", message);
+```
+
+## Context Type
+
+```typescript
+interface Context {
+  systemPrompt: string;
+  messages: Message[];
+  tools?: Tool[];
+}
+```
+
+## ThinkingLevel Type
+
+```typescript
+type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+```
+
+Note: `"xhigh"` is only supported by GPT-5.2/5.3 models and Anthropic Opus 4.6 models.

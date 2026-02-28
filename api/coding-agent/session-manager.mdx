@@ -1,0 +1,317 @@
+---
+title: SessionManager
+description: Manage session persistence, history, and branching
+---
+
+The `SessionManager` class handles session persistence, history tracking, and session tree operations. Each session is stored as an append-only log of entries.
+
+## Import
+
+```typescript
+import { SessionManager } from "@mariozechner/pi-coding-agent";
+```
+
+## Constructor
+
+```typescript
+new SessionManager(sessionDir?: string)
+```
+
+<ParamField path="sessionDir" type="string">
+  Directory for session storage. Default: `~/.pi/sessions/`
+</ParamField>
+
+## Methods
+
+### createSession
+
+Create a new session.
+
+```typescript
+createSession(cwd: string, options?: NewSessionOptions): SessionInfo
+```
+
+<ParamField path="cwd" type="string" required>
+  Working directory for the session
+</ParamField>
+
+<ParamField path="options" type="NewSessionOptions">
+  <Expandable title="properties">
+    <ParamField path="parentSession" type="string">
+      ID of parent session (for branching)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="SessionInfo" type="object">
+  <Expandable title="properties">
+    <ResponseField name="id" type="string">
+      Unique session ID
+    </ResponseField>
+    
+    <ResponseField name="cwd" type="string">
+      Working directory
+    </ResponseField>
+    
+    <ResponseField name="timestamp" type="string">
+      Creation timestamp (ISO 8601)
+    </ResponseField>
+    
+    <ResponseField name="parentSession" type="string">
+      Parent session ID (if branched)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### loadSession
+
+Load an existing session.
+
+```typescript
+loadSession(sessionId: string): SessionInfo
+```
+
+<ParamField path="sessionId" type="string" required>
+  The session ID to load
+</ParamField>
+
+### appendEntry
+
+Append an entry to the current session.
+
+```typescript
+appendEntry(entry: SessionEntry): void
+```
+
+<ParamField path="entry" type="SessionEntry" required>
+  Entry to append (message, model change, compaction, etc.)
+</ParamField>
+
+**Entry Types:**
+- `SessionMessageEntry` - Agent message
+- `ModelChangeEntry` - Model switch
+- `ThinkingLevelChangeEntry` - Thinking level change
+- `CompactionEntry` - Context compaction
+- `BranchSummaryEntry` - Branch summary
+- `CustomEntry` - Extension data (not sent to LLM)
+- `CustomMessageEntry` - Extension message (sent to LLM)
+
+### readEntries
+
+Read entries from a specific point in the session.
+
+```typescript
+readEntries(fromId?: string): SessionEntry[]
+```
+
+<ParamField path="fromId" type="string">
+  Entry ID to start from. If omitted, returns all entries.
+</ParamField>
+
+Returns entries in chronological order with proper parent-child relationships.
+
+### getTree
+
+Get the session tree structure.
+
+```typescript
+getTree(): SessionTreeNode[]
+```
+
+Returns a defensive copy of the session tree showing the branching structure.
+
+### listSessions
+
+List all available sessions.
+
+```typescript
+listSessions(): SessionInfo[]
+```
+
+Returns metadata for all sessions, sorted by creation time.
+
+### deleteSession
+
+Delete a session.
+
+```typescript
+deleteSession(sessionId: string): void
+```
+
+<ParamField path="sessionId" type="string" required>
+  The session ID to delete
+</ParamField>
+
+## Session Context Building
+
+### buildSessionContext
+
+Build LLM context from session entries.
+
+```typescript
+buildSessionContext(
+  entries: SessionEntry[],
+  systemPrompt: string,
+  currentModel: Model
+): SessionContext
+```
+
+<ParamField path="entries" type="SessionEntry[]" required>
+  Session entries to process
+</ParamField>
+
+<ParamField path="systemPrompt" type="string" required>
+  System prompt for the agent
+</ParamField>
+
+<ParamField path="currentModel" type="Model" required>
+  Current model (for model-specific formatting)
+</ParamField>
+
+<ResponseField name="SessionContext" type="object">
+  <Expandable title="properties">
+    <ResponseField name="systemPrompt" type="string">
+      System prompt
+    </ResponseField>
+    
+    <ResponseField name="messages" type="AgentMessage[]">
+      Messages ready for LLM
+    </ResponseField>
+    
+    <ResponseField name="model" type="Model">
+      Current model
+    </ResponseField>
+    
+    <ResponseField name="thinkingLevel" type="ThinkingLevel">
+      Current thinking level
+    </ResponseField>
+    
+    <ResponseField name="tools" type="AgentTool[]">
+      Active tools
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Entry Types
+
+### SessionMessageEntry
+
+Stores an agent message (user, assistant, or tool result).
+
+```typescript
+interface SessionMessageEntry {
+  type: "message";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  message: AgentMessage;
+}
+```
+
+### CompactionEntry
+
+Records a context compaction operation.
+
+```typescript
+interface CompactionEntry<T = unknown> {
+  type: "compaction";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  summary: string;
+  firstKeptEntryId: string;
+  tokensBefore: number;
+  details?: T;           // Extension data
+  fromHook?: boolean;    // True if from extension
+}
+```
+
+### CustomEntry
+
+Extension-specific data (not sent to LLM).
+
+```typescript
+interface CustomEntry<T = unknown> {
+  type: "custom";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  customType: string;    // Extension identifier
+  data?: T;
+}
+```
+
+### CustomMessageEntry
+
+Extension message sent to LLM.
+
+```typescript
+interface CustomMessageEntry<T = unknown> {
+  type: "custom_message";
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  customType: string;
+  content: string | (TextContent | ImageContent)[];
+  details?: T;           // Extension data (not sent to LLM)
+  display: boolean;      // Show in TUI?
+}
+```
+
+## Example
+
+```typescript
+import { SessionManager, buildSessionContext } from "@mariozechner/pi-coding-agent";
+
+const manager = new SessionManager();
+
+// Create a new session
+const session = manager.createSession(process.cwd());
+console.log(`Session ID: ${session.id}`);
+
+// Append a message entry
+manager.appendEntry({
+  type: "message",
+  id: randomUUID(),
+  parentId: null,
+  timestamp: new Date().toISOString(),
+  message: {
+    role: "user",
+    content: "Hello, agent!",
+    timestamp: Date.now(),
+  },
+});
+
+// Read all entries
+const entries = manager.readEntries();
+
+// Build context for LLM
+const context = buildSessionContext(
+  entries,
+  "You are a helpful coding assistant.",
+  model
+);
+
+// List all sessions
+const sessions = manager.listSessions();
+console.log(`Total sessions: ${sessions.length}`);
+```
+
+## Session File Format
+
+Sessions are stored as newline-delimited JSON (NDJSON) in `~/.pi/sessions/`:
+
+```
+~/.pi/sessions/
+  ├── abc123.session        # Session file
+  ├── def456.session
+  └── ...
+```
+
+Each line in a session file is a JSON object:
+
+```json
+{"type":"session","version":3,"id":"abc123","timestamp":"2026-02-28T10:00:00Z","cwd":"/path"}
+{"type":"message","id":"msg1","parentId":null,"timestamp":"...","message":{...}}
+{"type":"compaction","id":"cmp1","parentId":"msg5","timestamp":"...","summary":"..."}
+```

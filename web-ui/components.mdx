@@ -1,0 +1,287 @@
+---
+title: Web UI Components
+description: Web components for building AI chat interfaces
+---
+
+The web UI library provides a comprehensive set of components for building AI chat applications with web technologies.
+
+## Chat Components
+
+### ChatPanel
+
+Complete chat interface with artifacts:
+
+```typescript
+import { ChatPanel } from '@mariozechner/pi-web-ui';
+
+const chatPanel = new ChatPanel();
+await chatPanel.setAgent(agent, {
+  onApiKeyRequired: async (provider) => ApiKeyPromptDialog.prompt(provider),
+  onBeforeSend: async () => { /* Hook before sending */ },
+  onCostClick: () => { /* Handle cost display click */ },
+  sandboxUrlProvider: () => chrome.runtime.getURL('sandbox.html'),
+  toolsFactory: (agent, agentInterface, artifactsPanel, runtime) => [
+    createJavaScriptReplTool(),
+  ],
+});
+
+document.body.appendChild(chatPanel);
+```
+
+### AgentInterface
+
+Chat interface for custom layouts:
+
+```typescript
+const chat = document.createElement('agent-interface') as AgentInterface;
+chat.session = agent;
+chat.enableAttachments = true;
+chat.enableModelSelector = true;
+chat.enableThinkingSelector = true;
+chat.showThemeToggle = false;
+chat.onApiKeyRequired = async (provider) => { /* ... */ };
+chat.onBeforeSend = async () => { /* ... */ };
+```
+
+### ArtifactsPanel
+
+Displays interactive artifacts:
+
+```typescript
+import { ArtifactsPanel } from '@mariozechner/pi-web-ui';
+
+const artifactsPanel = new ArtifactsPanel();
+artifactsPanel.agent = agent;
+
+// The tool is available as artifactsPanel.tool
+agent.setTools([artifactsPanel.tool]);
+```
+
+Supports: HTML, SVG, Markdown, text, JSON, images, PDF, DOCX, XLSX.
+
+## Input Components
+
+### MessageInput
+
+Rich text input with attachments:
+
+```typescript
+import { MessageInput } from '@mariozechner/pi-web-ui';
+
+const input = new MessageInput();
+input.onSend = async (text, attachments) => {
+  await agent.prompt({ role: 'user-with-attachments', content: text, attachments });
+};
+input.enableAttachments = true;
+input.placeholder = 'Type a message...';
+```
+
+### AttachmentButton
+
+File attachment selector:
+
+```typescript
+import { AttachmentButton } from '@mariozechner/pi-web-ui';
+
+const button = new AttachmentButton();
+button.onAttachments = async (attachments) => {
+  console.log('Attached:', attachments);
+};
+```
+
+## Selector Components
+
+### ModelSelector
+
+Model selection dialog:
+
+```typescript
+import { ModelSelector } from '@mariozechner/pi-web-ui';
+
+ModelSelector.open(currentModel, (selectedModel) => {
+  agent.setModel(selectedModel);
+});
+```
+
+### ThinkingLevelSelector
+
+Thinking level selector:
+
+```typescript
+import { ThinkingLevelSelector } from '@mariozechner/pi-web-ui';
+
+const selector = new ThinkingLevelSelector();
+selector.value = 'medium';
+selector.onChange = (level) => {
+  agent.setThinkingLevel(level);
+};
+```
+
+## Dialog Components
+
+### SettingsDialog
+
+Settings with multiple tabs:
+
+```typescript
+import {
+  SettingsDialog,
+  ProvidersModelsTab,
+  ProxyTab,
+  ApiKeysTab,
+} from '@mariozechner/pi-web-ui';
+
+SettingsDialog.open([
+  new ProvidersModelsTab(),
+  new ProxyTab(),
+  new ApiKeysTab(),
+]);
+```
+
+### SessionListDialog
+
+Session browser:
+
+```typescript
+import { SessionListDialog } from '@mariozechner/pi-web-ui';
+
+SessionListDialog.open(
+  async (sessionId) => { /* load session */ },
+  (deletedId) => { /* handle deletion */ },
+);
+```
+
+### ApiKeyPromptDialog
+
+API key prompt:
+
+```typescript
+import { ApiKeyPromptDialog } from '@mariozechner/pi-web-ui';
+
+const success = await ApiKeyPromptDialog.prompt('anthropic');
+```
+
+## Message Renderers
+
+### Built-in Renderers
+
+The library includes renderers for:
+- User messages with attachments
+- Assistant messages with streaming
+- Tool calls and results
+- Thinking blocks
+- Artifacts
+- Images and documents
+
+### Custom Renderers
+
+Register custom message renderers:
+
+```typescript
+import { registerMessageRenderer, type MessageRenderer } from '@mariozechner/pi-web-ui';
+
+const myRenderer: MessageRenderer = {
+  render: (message) => html`<div>${message.content}</div>`,
+};
+
+registerMessageRenderer('my-custom-role', myRenderer);
+```
+
+### Tool Renderers
+
+Register custom tool result renderers:
+
+```typescript
+import { registerToolRenderer, type ToolRenderer } from '@mariozechner/pi-web-ui';
+
+const myToolRenderer: ToolRenderer = {
+  render(params, result, isStreaming) {
+    return {
+      content: html`<div>...</div>`,
+      isCustom: false,  // true = no card wrapper
+    };
+  },
+};
+
+registerToolRenderer('my_tool', myToolRenderer);
+```
+
+## Attachments
+
+### Loading Attachments
+
+```typescript
+import { loadAttachment, type Attachment } from '@mariozechner/pi-web-ui';
+
+// From File input
+const file = inputElement.files[0];
+const attachment = await loadAttachment(file);
+
+// From URL
+const attachment = await loadAttachment('https://example.com/doc.pdf');
+
+// From ArrayBuffer
+const attachment = await loadAttachment(arrayBuffer, 'document.pdf');
+```
+
+### Attachment Structure
+
+```typescript
+interface Attachment {
+  id: string;
+  type: 'image' | 'document';
+  fileName: string;
+  mimeType: string;
+  size: number;
+  content: string;        // base64 encoded
+  extractedText?: string; // For documents
+  preview?: string;       // base64 preview image
+}
+```
+
+Supported formats: PDF, DOCX, XLSX, PPTX, images, text files.
+
+## CORS Proxy
+
+For browser environments:
+
+```typescript
+import { createStreamFn, shouldUseProxyForProvider } from '@mariozechner/pi-web-ui';
+
+// AgentInterface auto-configures from settings
+// For manual setup:
+agent.streamFn = createStreamFn(async () => {
+  const enabled = await storage.settings.get<boolean>('proxy.enabled');
+  return enabled ? await storage.settings.get<string>('proxy.url') : undefined;
+});
+```
+
+## Internationalization
+
+Add translations:
+
+```typescript
+import { i18n, setLanguage, translations } from '@mariozechner/pi-web-ui';
+
+translations.de = {
+  'Loading...': 'Laden...',
+  'No sessions yet': 'Noch keine Sitzungen',
+};
+
+setLanguage('de');
+console.log(i18n('Loading...'));  // "Laden..."
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Web UI Overview" icon="browser" href="/web-ui/overview">
+    Learn web UI concepts
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/web-ui/components">
+    Complete API documentation
+  </Card>
+  <Card title="Example App" icon="github" href="https://github.com/badlogic/pi-mono/tree/main/packages/web-ui/example">
+    View complete example
+  </Card>
+</CardGroup>

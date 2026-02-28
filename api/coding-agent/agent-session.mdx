@@ -1,0 +1,224 @@
+---
+title: AgentSession
+description: Core class for managing agent lifecycle, events, and session state
+---
+
+The `AgentSession` class is the central abstraction for agent lifecycle and session management. It provides access to agent state, event subscription with automatic persistence, model management, compaction, and session operations.
+
+## Import
+
+```typescript
+import { AgentSession } from "@mariozechner/pi-coding-agent";
+```
+
+## Constructor
+
+```typescript
+new AgentSession(config: AgentSessionConfig)
+```
+
+<ParamField path="config" type="AgentSessionConfig" required>
+  Configuration object for the agent session
+  
+  <Expandable title="properties">
+    <ParamField path="agent" type="Agent" required>
+      The underlying agent instance from `@mariozechner/pi-agent-core`
+    </ParamField>
+    
+    <ParamField path="sessionManager" type="SessionManager" required>
+      Manager for session persistence and history
+    </ParamField>
+    
+    <ParamField path="settingsManager" type="SettingsManager" required>
+      Manager for user settings (compaction, images, etc.)
+    </ParamField>
+    
+    <ParamField path="cwd" type="string" required>
+      Current working directory for tool operations
+    </ParamField>
+    
+    <ParamField path="scopedModels" type="Array<{ model: Model; thinkingLevel: ThinkingLevel }>">
+      Models to cycle through with keyboard shortcuts
+    </ParamField>
+    
+    <ParamField path="resourceLoader" type="ResourceLoader" required>
+      Loader for skills, prompts, themes, and context files
+    </ParamField>
+    
+    <ParamField path="customTools" type="ToolDefinition[]">
+      Custom tools registered outside extensions
+    </ParamField>
+    
+    <ParamField path="modelRegistry" type="ModelRegistry" required>
+      Registry for API key resolution and model discovery
+    </ParamField>
+    
+    <ParamField path="initialActiveToolNames" type="string[]">
+      Initial active tool names. Default: `["read", "bash", "edit", "write"]`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Properties
+
+<ResponseField name="agent" type="Agent">
+  Access to the underlying agent instance
+</ResponseField>
+
+<ResponseField name="sessionManager" type="SessionManager">
+  Access to the session manager
+</ResponseField>
+
+<ResponseField name="cwd" type="string">
+  Current working directory
+</ResponseField>
+
+## Methods
+
+### addEventListener
+
+Subscribe to agent session events.
+
+```typescript
+addEventListener(listener: AgentSessionEventListener): void
+```
+
+<ParamField path="listener" type="(event: AgentSessionEvent) => void" required>
+  Callback function that receives session events
+</ParamField>
+
+**Events:**
+- `agent_start` - Agent turn begins
+- `agent_end` - Agent turn completes
+- `tool_execution_start` - Tool execution begins
+- `tool_execution_end` - Tool execution completes
+- `auto_compaction_start` - Automatic compaction triggered
+- `auto_compaction_end` - Automatic compaction finished
+- And more (see `AgentSessionEvent` type)
+
+### prompt
+
+Send a user message to the agent.
+
+```typescript
+prompt(text: string, options?: PromptOptions): Promise<ModelCycleResult>
+```
+
+<ParamField path="text" type="string" required>
+  The user's message text
+</ParamField>
+
+<ParamField path="options" type="PromptOptions">
+  <Expandable title="properties">
+    <ParamField path="attachments" type="Attachment[]">
+      File attachments to include with the message
+    </ParamField>
+    
+    <ParamField path="autoCompact" type="boolean">
+      Whether to auto-compact context if needed. Default: `true`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### executeBash
+
+Execute a bash command.
+
+```typescript
+executeBash(command: string, description?: string): Promise<BashResult>
+```
+
+<ParamField path="command" type="string" required>
+  The bash command to execute
+</ParamField>
+
+<ParamField path="description" type="string">
+  Optional description of the command
+</ParamField>
+
+### compact
+
+Manually trigger context compaction.
+
+```typescript
+compact(options?: CompactOptions): Promise<CompactionResult>
+```
+
+<ParamField path="options" type="CompactOptions">
+  <Expandable title="properties">
+    <ParamField path="targetTokens" type="number">
+      Target token count after compaction
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### switchSession
+
+Switch to a different session.
+
+```typescript
+switchSession(sessionId: string): Promise<void>
+```
+
+<ParamField path="sessionId" type="string" required>
+  The ID of the session to switch to
+</ParamField>
+
+### getState
+
+Get current agent state.
+
+```typescript
+getState(): AgentState
+```
+
+Returns the current agent state including messages, model, thinking level, and streaming status.
+
+## Example
+
+```typescript
+import { createAgentSession } from "@mariozechner/pi-coding-agent";
+
+const { session, extensionRunner } = await createAgentSession({
+  cwd: process.cwd(),
+  model: getModel("anthropic", "claude-4.5-sonnet-20250514"),
+  thinkingLevel: "medium",
+});
+
+// Subscribe to events
+session.addEventListener((event) => {
+  if (event.type === "tool_execution_start") {
+    console.log(`Tool: ${event.toolName}`);
+  }
+});
+
+// Send a message
+const result = await session.prompt("List files in the current directory");
+console.log(result.messages);
+```
+
+## Type Definitions
+
+### SessionStats
+
+Statistics about the current session.
+
+```typescript
+interface SessionStats {
+  messageCount: number;
+  tokenCount: number;
+  compactionCount: number;
+}
+```
+
+### ModelCycleResult
+
+Result from a prompt operation.
+
+```typescript
+interface ModelCycleResult {
+  messages: AgentMessage[];
+  aborted: boolean;
+  error?: string;
+}
+```

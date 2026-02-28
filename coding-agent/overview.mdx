@@ -1,0 +1,199 @@
+---
+title: "Overview"
+description: "Introduction to the Pi coding agent CLI - a minimal terminal coding harness"
+---
+
+Pi is a minimal terminal coding harness that adapts to your workflows through TypeScript extensions, Agent Skills, prompt templates, and themes. Instead of forcing you into a specific workflow, Pi provides powerful defaults and lets you customize everything.
+
+## What Makes Pi Different
+
+Pi ships with powerful defaults but skips opinionated features like sub-agents and plan mode. Instead, you can:
+
+- **Ask pi to build what you want** - Pi can create extensions for your specific workflow
+- **Install third-party packages** - Use npm or git to share and install extensions
+- **Customize without forking** - Extend functionality through well-defined APIs
+
+## Operating Modes
+
+Pi runs in four modes to fit different use cases:
+
+<CardGroup cols={2}>
+  <Card title="Interactive" icon="terminal" iconType="solid">
+    Full TUI with editor, commands, keyboard shortcuts, and visual feedback
+  </Card>
+  <Card title="Print" icon="print" iconType="solid">
+    One-shot mode that prints response and exits (`-p` flag)
+  </Card>
+  <Card title="JSON" icon="code" iconType="solid">
+    Event stream output for scripting (`--mode json`)
+  </Card>
+  <Card title="RPC" icon="plug" iconType="solid">
+    Process integration via stdin/stdout (`--mode rpc`)
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+Install globally via npm:
+
+```bash
+npm install -g @mariozechner/pi-coding-agent
+```
+
+Authenticate with an API key:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+pi
+```
+
+Or use your existing subscription:
+
+```bash
+pi
+/login  # Then select provider
+```
+
+## Core Features
+
+### Built-in Tools
+
+By default, pi gives the model four essential tools:
+
+- **`read`** - Read file contents
+- **`write`** - Create new files
+- **`edit`** - Modify existing files with precise replacements
+- **`bash`** - Execute shell commands
+
+Optional tools available via `--tools` flag:
+- **`grep`** - Search file contents
+- **`find`** - Find files by pattern
+- **`ls`** - List directory contents
+
+### Providers & Models
+
+Pi supports multiple providers through subscriptions or API keys:
+
+**Subscriptions (via `/login`):**
+- Anthropic Claude Pro/Max
+- OpenAI ChatGPT Plus/Pro
+- GitHub Copilot
+- Google Gemini CLI
+- Google Antigravity
+
+**API Keys:**
+- Anthropic, OpenAI, Azure OpenAI
+- Google Gemini, Google Vertex
+- Amazon Bedrock, Mistral, Groq
+- Cerebras, xAI, OpenRouter
+- And many more...
+
+See the [CLI Reference](/coding-agent/cli-reference) for all providers.
+
+### Session Management
+
+Sessions are stored as JSONL files with a tree structure, enabling:
+
+- **In-place branching** - Explore different conversation paths without creating new files
+- **Time travel** - Navigate to any point in the conversation tree via `/tree`
+- **Automatic compaction** - Summarize old messages when context grows too large
+- **Resume anywhere** - Continue previous sessions with `/resume` or `-c` flag
+
+### Extensibility
+
+Pi's extensibility system lets you customize everything:
+
+<CardGroup cols={2}>
+  <Card title="Extensions" icon="puzzle-piece">
+    TypeScript modules that add tools, commands, UI, and event handlers
+  </Card>
+  <Card title="Skills" icon="book">
+    On-demand capability packages following the Agent Skills standard
+  </Card>
+  <Card title="Prompt Templates" icon="file-lines">
+    Reusable prompts as Markdown files with variable substitution
+  </Card>
+  <Card title="Themes" icon="palette">
+    JSON files that customize TUI colors and appearance
+  </Card>
+</CardGroup>
+
+## Philosophy
+
+Pi is aggressively extensible so it doesn't have to dictate your workflow. Features that other tools bake in can be built with extensions or installed from third-party packages. This keeps the core minimal while letting you shape pi to fit how you work.
+
+**No MCP** - Build CLI tools with READMEs (see Skills), or build an extension that adds MCP support.
+
+**No sub-agents** - Spawn pi instances via tmux, or build your own with extensions, or install a package.
+
+**No permission popups** - Run in a container, or build your own confirmation flow with extensions.
+
+**No plan mode** - Write plans to files, or build it with extensions, or install a package.
+
+**No built-in to-dos** - They confuse models. Use a TODO.md file, or build your own with extensions.
+
+**No background bash** - Use tmux for full observability and direct interaction.
+
+## Example Usage
+
+<CodeGroup>
+```bash Interactive
+# Start interactive session
+pi "List all TypeScript files in src/"
+
+# Continue most recent session
+pi -c
+
+# Browse and select from past sessions
+pi -r
+```
+
+```bash Print Mode
+# One-shot response
+pi -p "Summarize this codebase"
+
+# With file context
+pi -p @screenshot.png "What's in this image?"
+
+# Read-only mode
+pi --tools read,grep,find,ls -p "Review the code"
+```
+
+```bash Different Models
+# Specify provider and model
+pi --provider openai --model gpt-4o "Help me refactor"
+
+# Model with provider prefix
+pi --model openai/gpt-4o "Help me refactor"
+
+# Model with thinking level
+pi --model sonnet:high "Solve this complex problem"
+```
+</CodeGroup>
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `PI_CODING_AGENT_DIR` | Override config directory (default: `~/.pi/agent`) |
+| `PI_PACKAGE_DIR` | Override package directory |
+| `PI_SKIP_VERSION_CHECK` | Skip version check at startup |
+| `PI_CACHE_RETENTION` | Set to `long` for extended prompt cache (Anthropic: 1h, OpenAI: 24h) |
+| `VISUAL`, `EDITOR` | External editor for Ctrl+G |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Interactive Mode" icon="terminal" href="/coding-agent/interactive-mode">
+    Learn about the editor, commands, and keyboard shortcuts
+  </Card>
+  <Card title="Sessions" icon="diagram-project" href="/coding-agent/sessions">
+    Understand session management, branching, and compaction
+  </Card>
+  <Card title="Extensions" icon="puzzle-piece" href="/coding-agent/extensions">
+    Build custom tools, commands, and UI components
+  </Card>
+  <Card title="Customization" icon="sliders" href="/coding-agent/customization">
+    Configure settings, themes, and resources
+  </Card>
+</CardGroup>

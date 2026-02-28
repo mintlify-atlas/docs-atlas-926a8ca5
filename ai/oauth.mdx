@@ -1,0 +1,610 @@
+---
+title: 'OAuth Authentication'
+description: 'Set up OAuth for subscription-based providers (OpenAI Codex, GitHub Copilot, Google Gemini CLI, Antigravity)'
+---
+
+# OAuth Authentication
+
+Several providers require OAuth authentication instead of static API keys:
+
+- **OpenAI Codex** - ChatGPT Plus/Pro subscription (GPT-5.x models with extended reasoning)
+- **GitHub Copilot** - Copilot subscription (GPT-4o, Claude via GitHub)
+- **Google Gemini CLI** - Google Cloud Code Assist (Gemini 2.0/2.5, free tier or paid)
+- **Antigravity** - Free Gemini 3, Claude, GPT-OSS via Google Cloud
+- **Vertex AI** - Google Cloud Vertex AI (uses Application Default Credentials)
+- **Anthropic** - Claude Pro/Max subscription (optional, alternative to API key)
+
+## Quick Start (CLI)
+
+The fastest way to authenticate:
+
+```bash
+# Interactive provider selection
+npx @mariozechner/pi-ai login
+
+# Login to specific provider
+npx @mariozechner/pi-ai login anthropic
+npx @mariozechner/pi-ai login openai-codex
+npx @mariozechner/pi-ai login github-copilot
+npx @mariozechner/pi-ai login google-gemini-cli
+npx @mariozechner/pi-ai login google-antigravity
+
+# List available providers
+npx @mariozechner/pi-ai list
+```
+
+Credentials are saved to `auth.json` in the current directory.
+
+## OpenAI Codex
+
+**Requirements**: ChatGPT Plus or Pro subscription
+
+**Models**: gpt-5-mini, gpt-5-nano, gpt-5.1-omni
+
+**Features**: Extended reasoning, session-based caching, WebSocket support
+
+### CLI Login
+
+```bash
+npx @mariozechner/pi-ai login openai-codex
+```
+
+### Programmatic Login
+
+```typescript
+import { loginOpenAICodex } from '@mariozechner/pi-ai';
+import { writeFileSync } from 'fs';
+
+const credentials = await loginOpenAICodex({
+  onAuth: (info) => {
+    console.log(`Open: ${info.url}`);
+    if (info.instructions) console.log(info.instructions);
+  },
+  onProgress: (message) => console.log(message)
+});
+
+// Store credentials
+const auth = { 'openai-codex': { type: 'oauth', ...credentials } };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+```
+
+### Using OpenAI Codex
+
+```typescript
+import { getModel, complete, getOAuthApiKey } from '@mariozechner/pi-ai';
+import { readFileSync, writeFileSync } from 'fs';
+
+// Load credentials
+const auth = JSON.parse(readFileSync('auth.json', 'utf-8'));
+
+// Get API key (auto-refreshes if expired)
+const result = await getOAuthApiKey('openai-codex', auth);
+if (!result) throw new Error('Not logged in');
+
+// Save refreshed credentials
+auth['openai-codex'] = { type: 'oauth', ...result.newCredentials };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+
+// Use the model
+const model = getModel('openai-codex', 'gpt-5-mini');
+const response = await complete(model, {
+  messages: [{ role: 'user', content: 'Explain quantum computing' }]
+}, { 
+  apiKey: result.apiKey,
+  sessionId: 'my-session',  // Enable session-based caching
+  transport: 'websocket'     // 'sse' | 'websocket' | 'auto'
+});
+```
+
+### Session-Based Caching
+
+OpenAI Codex supports automatic prompt caching when using session IDs:
+
+```typescript
+const sessionId = 'user-123-session';
+
+// First request - full cost
+const response1 = await complete(model, context, {
+  apiKey,
+  sessionId
+});
+
+// Second request with same sessionId - reduced cost due to caching
+context.messages.push(response1);
+context.messages.push({ role: 'user', content: 'Tell me more' });
+
+const response2 = await complete(model, context, {
+  apiKey,
+  sessionId  // Reuses cached prompt prefix
+});
+```
+
+### WebSocket vs SSE
+
+OpenAI Codex supports two transport modes:
+
+```typescript
+// Server-Sent Events (default)
+const response1 = await complete(model, context, {
+  apiKey,
+  transport: 'sse'
+});
+
+// WebSocket (faster, connection reused per session)
+const response2 = await complete(model, context, {
+  apiKey,
+  transport: 'websocket',
+  sessionId: 'my-session'  // WebSocket connection reused for this session
+});
+
+// Auto (uses WebSocket if sessionId provided)
+const response3 = await complete(model, context, {
+  apiKey,
+  transport: 'auto',
+  sessionId: 'my-session'
+});
+```
+
+WebSocket connections with `sessionId` are reused and expire after 5 minutes of inactivity.
+
+## GitHub Copilot
+
+**Requirements**: GitHub Copilot subscription
+
+**Models**: gpt-4o, claude-3.5-sonnet (via GitHub)
+
+### CLI Login
+
+```bash
+npx @mariozechner/pi-ai login github-copilot
+```
+
+### Programmatic Login
+
+```typescript
+import { loginGitHubCopilot } from '@mariozechner/pi-ai';
+import { writeFileSync } from 'fs';
+
+const credentials = await loginGitHubCopilot({
+  onAuth: (info) => {
+    console.log(`Open: ${info.url}`);
+  },
+  onPrompt: async (prompt) => {
+    // Prompt user for input (e.g., device code)
+    return await getUserInput(prompt.message);
+  },
+  onProgress: (message) => console.log(message)
+});
+
+// Store credentials
+const auth = { 'github-copilot': { type: 'oauth', ...credentials } };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+```
+
+### Using GitHub Copilot
+
+```typescript
+import { getModel, complete, getOAuthApiKey } from '@mariozechner/pi-ai';
+import { readFileSync, writeFileSync } from 'fs';
+
+const auth = JSON.parse(readFileSync('auth.json', 'utf-8'));
+const result = await getOAuthApiKey('github-copilot', auth);
+if (!result) throw new Error('Not logged in');
+
+auth['github-copilot'] = { type: 'oauth', ...result.newCredentials };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+
+const model = getModel('github-copilot', 'gpt-4o');
+const response = await complete(model, {
+  messages: [{ role: 'user', content: 'Hello!' }]
+}, { apiKey: result.apiKey });
+```
+
+<Warning>
+If you get "model not supported" error, enable the model manually in VS Code:
+1. Open Copilot Chat
+2. Click model selector
+3. Select the model (warning icon)
+4. Click "Enable"
+</Warning>
+
+## Google Gemini CLI
+
+**Requirements**: Google account (free tier or paid Cloud Code Assist)
+
+**Models**: gemini-2.0-flash-thinking, gemini-2.5-flash, gemini-2.5-pro
+
+### CLI Login
+
+```bash
+npx @mariozechner/pi-ai login google-gemini-cli
+```
+
+### Programmatic Login
+
+```typescript
+import { loginGeminiCli } from '@mariozechner/pi-ai';
+import { writeFileSync } from 'fs';
+
+const credentials = await loginGeminiCli({
+  onAuth: (info) => {
+    console.log(`Open: ${info.url}`);
+  },
+  onProgress: (message) => console.log(message)
+});
+
+const auth = { 'google-gemini-cli': { type: 'oauth', ...credentials } };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+```
+
+### Using Google Gemini CLI
+
+```typescript
+import { getModel, complete, getOAuthApiKey } from '@mariozechner/pi-ai';
+import { readFileSync, writeFileSync } from 'fs';
+
+const auth = JSON.parse(readFileSync('auth.json', 'utf-8'));
+const result = await getOAuthApiKey('google-gemini-cli', auth);
+if (!result) throw new Error('Not logged in');
+
+auth['google-gemini-cli'] = { type: 'oauth', ...result.newCredentials };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+
+const model = getModel('google-gemini-cli', 'gemini-2.5-flash');
+const response = await complete(model, {
+  messages: [{ role: 'user', content: 'Hello!' }]
+}, { apiKey: result.apiKey });
+```
+
+### Paid Subscription
+
+For paid Cloud Code Assist subscriptions, set your project ID:
+
+```bash
+export GOOGLE_CLOUD_PROJECT="my-project-id"
+# or
+export GOOGLE_CLOUD_PROJECT_ID="my-project-id"
+```
+
+## Antigravity
+
+**Requirements**: Google account
+
+**Models**: Free Gemini 3, Claude, GPT-OSS models via Google Cloud
+
+### CLI Login
+
+```bash
+npx @mariozechner/pi-ai login google-antigravity
+```
+
+### Programmatic Login
+
+```typescript
+import { loginAntigravity } from '@mariozechner/pi-ai';
+import { writeFileSync } from 'fs';
+
+const credentials = await loginAntigravity({
+  onAuth: (info) => {
+    console.log(`Open: ${info.url}`);
+  },
+  onProgress: (message) => console.log(message)
+});
+
+const auth = { 'google-antigravity': { type: 'oauth', ...credentials } };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+```
+
+### Using Antigravity
+
+```typescript
+import { getModel, complete, getOAuthApiKey } from '@mariozechner/pi-ai';
+import { readFileSync, writeFileSync } from 'fs';
+
+const auth = JSON.parse(readFileSync('auth.json', 'utf-8'));
+const result = await getOAuthApiKey('google-antigravity', auth);
+if (!result) throw new Error('Not logged in');
+
+auth['google-antigravity'] = { type: 'oauth', ...result.newCredentials };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+
+const model = getModel('google-antigravity', 'gemini-3-flash');
+const response = await complete(model, {
+  messages: [{ role: 'user', content: 'Hello!' }]
+}, { apiKey: result.apiKey });
+```
+
+### Version Override
+
+If Google updates their requirements, override the Antigravity version:
+
+```bash
+export PI_AI_ANTIGRAVITY_VERSION="1.23.0"
+```
+
+## Vertex AI
+
+**Requirements**: Google Cloud account with Vertex AI enabled
+
+**Models**: Gemini models via Vertex AI
+
+**Authentication**: Application Default Credentials (ADC)
+
+### Local Development
+
+```bash
+# Login with your Google account
+gcloud auth application-default login
+
+# Set project and location
+export GOOGLE_CLOUD_PROJECT="my-project"
+export GOOGLE_CLOUD_LOCATION="us-central1"
+```
+
+### Production (Service Account)
+
+```bash
+# Point to service account key file
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+
+# Or set in code
+import { getModel, complete } from '@mariozechner/pi-ai';
+
+const model = getModel('google-vertex', 'gemini-2.5-flash');
+const response = await complete(model, context, {
+  project: 'my-project',
+  location: 'us-central1'
+});
+```
+
+### Using Vertex AI
+
+```typescript
+import { getModel, complete } from '@mariozechner/pi-ai';
+
+const model = getModel('google-vertex', 'gemini-2.5-flash');
+
+const response = await complete(model, {
+  messages: [{ role: 'user', content: 'Hello from Vertex AI' }]
+});
+
+for (const block of response.content) {
+  if (block.type === 'text') console.log(block.text);
+}
+```
+
+Official docs: [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials)
+
+## Anthropic (OAuth)
+
+**Requirements**: Claude Pro or Max subscription
+
+**Alternative to**: `ANTHROPIC_API_KEY`
+
+### CLI Login
+
+```bash
+npx @mariozechner/pi-ai login anthropic
+```
+
+### Programmatic Login
+
+```typescript
+import { loginAnthropic } from '@mariozechner/pi-ai';
+import { writeFileSync } from 'fs';
+
+const credentials = await loginAnthropic({
+  onAuth: (info) => {
+    console.log(`Open: ${info.url}`);
+  },
+  onProgress: (message) => console.log(message)
+});
+
+const auth = { 'anthropic': { type: 'oauth', ...credentials } };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+```
+
+### Using Anthropic OAuth
+
+```typescript
+import { getModel, complete, getOAuthApiKey } from '@mariozechner/pi-ai';
+import { readFileSync, writeFileSync } from 'fs';
+
+const auth = JSON.parse(readFileSync('auth.json', 'utf-8'));
+const result = await getOAuthApiKey('anthropic', auth);
+if (!result) throw new Error('Not logged in');
+
+auth['anthropic'] = { type: 'oauth', ...result.newCredentials };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+
+const model = getModel('anthropic', 'claude-3.5-sonnet-20241022');
+const response = await complete(model, {
+  messages: [{ role: 'user', content: 'Hello!' }]
+}, { apiKey: result.apiKey });
+```
+
+<Note>
+You can also use `ANTHROPIC_API_KEY` environment variable instead of OAuth for standard API access.
+</Note>
+
+## Credential Management
+
+The library provides helpers for credential management:
+
+### Refresh Expired Tokens
+
+```typescript
+import { refreshOAuthToken } from '@mariozechner/pi-ai';
+import { readFileSync, writeFileSync } from 'fs';
+
+const auth = JSON.parse(readFileSync('auth.json', 'utf-8'));
+const credentials = auth['github-copilot'];
+
+// Check if expired
+if (credentials.expires < Date.now()) {
+  // Refresh
+  const newCredentials = await refreshOAuthToken('github-copilot', credentials);
+  auth['github-copilot'] = { type: 'oauth', ...newCredentials };
+  writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+}
+```
+
+### Get API Key (Auto-Refresh)
+
+```typescript
+import { getOAuthApiKey } from '@mariozechner/pi-ai';
+
+// Automatically refreshes if expired
+const result = await getOAuthApiKey('github-copilot', auth);
+if (!result) {
+  throw new Error('Not logged in to GitHub Copilot');
+}
+
+// Use the API key
+const response = await complete(model, context, {
+  apiKey: result.apiKey
+});
+
+// Save refreshed credentials
+auth['github-copilot'] = { type: 'oauth', ...result.newCredentials };
+writeFileSync('auth.json', JSON.stringify(auth, null, 2));
+```
+
+## Environment Variables
+
+For OAuth providers, you can also set tokens via environment variables:
+
+```bash
+# GitHub Copilot
+export COPILOT_GITHUB_TOKEN="gho_..."
+# or
+export GH_TOKEN="gho_..."
+# or
+export GITHUB_TOKEN="gho_..."
+
+# Anthropic (OAuth alternative)
+export ANTHROPIC_OAUTH_TOKEN="..."
+```
+
+## Complete Example
+
+Full OAuth workflow:
+
+```typescript
+import {
+  loginGitHubCopilot,
+  getOAuthApiKey,
+  getModel,
+  complete
+} from '@mariozechner/pi-ai';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+
+const AUTH_FILE = 'auth.json';
+const PROVIDER = 'github-copilot';
+
+async function main() {
+  let auth = {};
+  
+  // Load existing auth if available
+  if (existsSync(AUTH_FILE)) {
+    auth = JSON.parse(readFileSync(AUTH_FILE, 'utf-8'));
+  }
+  
+  // Check if we have credentials
+  if (!auth[PROVIDER]) {
+    console.log('Not logged in, starting OAuth flow...');
+    const credentials = await loginGitHubCopilot({
+      onAuth: (info) => {
+        console.log(`\nOpen this URL: ${info.url}\n`);
+      },
+      onPrompt: async (prompt) => {
+        const readline = await import('readline');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
+        return new Promise((resolve) => {
+          rl.question(prompt.message + ' ', (answer) => {
+            rl.close();
+            resolve(answer);
+          });
+        });
+      },
+      onProgress: (msg) => console.log(msg)
+    });
+    
+    auth[PROVIDER] = { type: 'oauth', ...credentials };
+    writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2));
+    console.log('Credentials saved to auth.json');
+  }
+  
+  // Get API key (auto-refreshes if expired)
+  const result = await getOAuthApiKey(PROVIDER, auth);
+  if (!result) {
+    throw new Error(`Not logged in to ${PROVIDER}`);
+  }
+  
+  // Save refreshed credentials
+  auth[PROVIDER] = { type: 'oauth', ...result.newCredentials };
+  writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2));
+  
+  // Use the API
+  const model = getModel('github-copilot', 'gpt-4o');
+  const response = await complete(model, {
+    messages: [{ role: 'user', content: 'Write a haiku about coding' }]
+  }, { apiKey: result.apiKey });
+  
+  for (const block of response.content) {
+    if (block.type === 'text') {
+      console.log(block.text);
+    }
+  }
+  
+  console.log(`\nTokens: ${response.usage.totalTokens}`);
+  console.log(`Cost: $${response.usage.cost.total.toFixed(4)}`);
+}
+
+main().catch(console.error);
+```
+
+## Troubleshooting
+
+### Token Expired
+
+Use `getOAuthApiKey` - it automatically refreshes:
+
+```typescript
+const result = await getOAuthApiKey(provider, auth);
+if (!result) {
+  // Re-login required
+  const credentials = await loginGitHubCopilot(...);
+}
+```
+
+### Model Not Available
+
+**GitHub Copilot**: Enable model in VS Code Copilot Chat settings
+
+**Google Gemini CLI**: Ensure you're logged in with correct account
+
+**OpenAI Codex**: Requires ChatGPT Plus/Pro subscription
+
+### Invalid Credentials
+
+Delete `auth.json` and re-login:
+
+```bash
+rm auth.json
+npx @mariozechner/pi-ai login <provider>
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Providers" icon="server" href="/ai/providers">
+    Explore all supported providers
+  </Card>
+  <Card title="Streaming" icon="wave-pulse" href="/ai/streaming">
+    Learn about streaming API
+  </Card>
+</CardGroup>

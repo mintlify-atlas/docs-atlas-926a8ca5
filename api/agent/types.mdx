@@ -1,0 +1,342 @@
+---
+title: Agent Types
+description: Type definitions for the agent core package
+---
+
+Core TypeScript types for the `@mariozechner/pi-agent-core` package.
+
+## Import
+
+```typescript
+import type {
+  Agent,
+  AgentState,
+  AgentMessage,
+  AgentTool,
+  AgentEvent,
+  ThinkingLevel,
+} from "@mariozechner/pi-agent-core";
+```
+
+## Agent Types
+
+### AgentState
+
+Complete agent state.
+
+```typescript
+interface AgentState {
+  systemPrompt: string;
+  model: Model<any>;
+  thinkingLevel: ThinkingLevel;
+  tools: AgentTool<any>[];
+  messages: AgentMessage[];
+  isStreaming: boolean;
+  streamMessage: AgentMessage | null;
+  pendingToolCalls: Set<string>;
+  error?: string;
+}
+```
+
+### AgentMessage
+
+Union of LLM messages and custom messages.
+
+```typescript
+type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];
+```
+
+Apps can extend with custom message types via declaration merging:
+
+```typescript
+declare module "@mariozechner/pi-agent-core" {
+  interface CustomAgentMessages {
+    artifact: ArtifactMessage;
+    notification: NotificationMessage;
+  }
+}
+```
+
+### AgentTool
+
+Tool definition.
+
+```typescript
+interface AgentTool<TSchema extends TSchema = any> {
+  name: string;
+  description: string;
+  parameters: TSchema;
+  execute: (
+    toolCallId: string,
+    args: Static<TSchema>,
+    signal?: AbortSignal,
+    updateCallback?: AgentToolUpdateCallback
+  ) => Promise<AgentToolResult<any>>;
+}
+```
+
+### AgentToolResult
+
+Tool execution result.
+
+```typescript
+interface AgentToolResult<T> {
+  content: (TextContent | ImageContent)[];
+  details: T;
+}
+```
+
+<ResponseField name="content" type="Content[]">
+  Content blocks sent to LLM
+</ResponseField>
+
+<ResponseField name="details" type="T">
+  Metadata for UI/logging (not sent to LLM)
+</ResponseField>
+
+### ThinkingLevel
+
+Reasoning intensity.
+
+```typescript
+type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+```
+
+## Context Types
+
+### AgentContext
+
+Context passed to agent loop.
+
+```typescript
+interface AgentContext {
+  systemPrompt: string;
+  messages: AgentMessage[];
+  tools: AgentTool<any>[];
+}
+```
+
+### AgentLoopConfig
+
+Configuration for agent loop.
+
+```typescript
+interface AgentLoopConfig extends SimpleStreamOptions {
+  model: Model<any>;
+  convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
+  transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
+  getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
+  getSteeringMessages?: () => Promise<AgentMessage[]>;
+  getFollowUpMessages?: () => Promise<AgentMessage[]>;
+}
+```
+
+## Event Types
+
+### AgentEvent
+
+Union of all agent events.
+
+```typescript
+type AgentEvent =
+  | AgentStartEvent
+  | AgentEndEvent
+  | TurnStartEvent
+  | TurnEndEvent
+  | MessageStartEvent
+  | MessageUpdateEvent
+  | MessageEndEvent
+  | ToolExecutionStartEvent
+  | ToolExecutionUpdateEvent
+  | ToolExecutionEndEvent;
+```
+
+### AgentStartEvent
+
+```typescript
+interface AgentStartEvent {
+  type: "agent_start";
+}
+```
+
+### AgentEndEvent
+
+```typescript
+interface AgentEndEvent {
+  type: "agent_end";
+  messages: AgentMessage[];
+}
+```
+
+### MessageStartEvent
+
+```typescript
+interface MessageStartEvent {
+  type: "message_start";
+  message: AgentMessage;
+}
+```
+
+### MessageUpdateEvent
+
+```typescript
+interface MessageUpdateEvent {
+  type: "message_update";
+  message: AgentMessage;
+}
+```
+
+### MessageEndEvent
+
+```typescript
+interface MessageEndEvent {
+  type: "message_end";
+  message: AgentMessage;
+}
+```
+
+### ToolExecutionStartEvent
+
+```typescript
+interface ToolExecutionStartEvent {
+  type: "tool_execution_start";
+  toolCallId: string;
+  toolName: string;
+  arguments: Record<string, any>;
+}
+```
+
+### ToolExecutionUpdateEvent
+
+```typescript
+interface ToolExecutionUpdateEvent {
+  type: "tool_execution_update";
+  toolCallId: string;
+  delta: string;
+}
+```
+
+### ToolExecutionEndEvent
+
+```typescript
+interface ToolExecutionEndEvent {
+  type: "tool_execution_end";
+  toolCallId: string;
+  result: AgentToolResult<any>;
+}
+```
+
+### TurnStartEvent
+
+```typescript
+interface TurnStartEvent {
+  type: "turn_start";
+}
+```
+
+### TurnEndEvent
+
+```typescript
+interface TurnEndEvent {
+  type: "turn_end";
+}
+```
+
+## Callback Types
+
+### AgentToolUpdateCallback
+
+Callback for streaming tool execution progress.
+
+```typescript
+type AgentToolUpdateCallback = (delta: string) => void;
+```
+
+Use this to stream tool output:
+
+```typescript
+const tool: AgentTool = {
+  name: "search",
+  description: "Search the web",
+  parameters: Type.Object({ query: Type.String() }),
+  execute: async (toolCallId, args, signal, updateCallback) => {
+    updateCallback?.("Searching...");
+    const results = await search(args.query);
+    updateCallback?.("Done!");
+    
+    return {
+      content: [{ type: "text", text: results }],
+      details: { count: results.length },
+    };
+  },
+};
+```
+
+## Stream Function Type
+
+### StreamFn
+
+Custom stream function type.
+
+```typescript
+type StreamFn = (
+  model: Model<any>,
+  context: Context,
+  options?: SimpleStreamOptions
+) => AssistantMessageEventStream | Promise<AssistantMessageEventStream>;
+```
+
+Used for custom transports (see [Transport](/api/agent/transport)).
+
+## Example: Type-Safe Agent
+
+```typescript
+import type {
+  Agent,
+  AgentState,
+  AgentMessage,
+  AgentTool,
+  AgentEvent,
+} from "@mariozechner/pi-agent-core";
+import { Agent } from "@mariozechner/pi-agent-core";
+import { Type } from "@sinclair/typebox";
+
+// Define custom tool
+const searchTool: AgentTool = {
+  name: "search",
+  description: "Search the web",
+  parameters: Type.Object({
+    query: Type.String({ description: "Search query" }),
+  }),
+  execute: async (toolCallId, args, signal, updateCallback) => {
+    updateCallback?.("Searching...");
+    // ... implement search ...
+    return {
+      content: [{ type: "text", text: "Results..." }],
+      details: { count: 10 },
+    };
+  },
+};
+
+// Create agent
+const agent: Agent = new Agent({
+  initialState: {
+    systemPrompt: "You are helpful.",
+    model: getModel("anthropic", "claude-4.5-sonnet-20250514"),
+    thinkingLevel: "medium",
+    tools: [searchTool],
+    messages: [],
+  },
+});
+
+// Send message
+const stream = agent.prompt("Search for cats");
+
+// Type-safe event handling
+stream.on("tool_execution_start", (event: ToolExecutionStartEvent) => {
+  console.log(`Executing: ${event.toolName}`);
+});
+
+// Await result
+const messages: AgentMessage[] = await stream.result();
+```

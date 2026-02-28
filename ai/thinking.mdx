@@ -1,0 +1,440 @@
+---
+title: 'Thinking & Reasoning'
+description: 'Enable reasoning capabilities across providers with unified interface'
+---
+
+# Thinking & Reasoning
+
+Many models support thinking/reasoning capabilities where they show their internal thought process before generating a response. The library provides both a unified interface and provider-specific options.
+
+## Checking Reasoning Support
+
+Check if a model supports reasoning:
+
+```typescript
+import { getModel } from '@mariozechner/pi-ai';
+
+const model = getModel('anthropic', 'claude-sonnet-4-20250514');
+
+if (model.reasoning) {
+  console.log('Model supports reasoning/thinking');
+}
+```
+
+## Reasoning-Capable Models
+
+Models that support reasoning across providers:
+
+- **OpenAI**: o1-preview, o1-mini, o3-mini, gpt-5-mini, gpt-5-nano, gpt-5.1-omni
+- **Anthropic**: claude-sonnet-4-20250514
+- **Google**: gemini-2.0-flash, gemini-2.5-flash, gemini-2.5-pro
+- **xAI**: grok-code-fast-1, grok-beta, grok-vision-beta
+- **Groq**: openai/gpt-oss-20b, openai/gpt-oss-40b
+- **Cerebras**: gpt-oss-120b
+- **OpenRouter**: Various models (e.g., z-ai/glm-4.5v)
+
+## Unified Interface (Recommended)
+
+Use `streamSimple` and `completeSimple` for automatic cross-provider compatibility:
+
+```typescript
+import { getModel, completeSimple } from '@mariozechner/pi-ai';
+
+// Works with any reasoning-capable model
+const model = getModel('anthropic', 'claude-sonnet-4-20250514');
+// or getModel('openai', 'gpt-5-mini')
+// or getModel('google', 'gemini-2.5-flash')
+// or getModel('xai', 'grok-code-fast-1')
+
+const response = await completeSimple(model, {
+  messages: [{ role: 'user', content: 'Solve: 2x + 5 = 13' }]
+}, {
+  reasoning: 'medium'  // 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+});
+
+// Access thinking and text blocks
+for (const block of response.content) {
+  if (block.type === 'thinking') {
+    console.log('Thinking:', block.thinking);
+  } else if (block.type === 'text') {
+    console.log('Response:', block.text);
+  }
+}
+```
+
+### Reasoning Levels
+
+Five reasoning levels with automatic provider mapping:
+
+| Level | Description | Token Budget (approx) |
+|-------|-------------|----------------------|
+| `minimal` | Very quick, basic reasoning | ~1,000 tokens |
+| `low` | Quick reasoning | ~2,000 tokens |
+| `medium` | Balanced reasoning (recommended) | ~4,000 tokens |
+| `high` | Deep reasoning | ~8,000 tokens |
+| `xhigh` | Maximum reasoning (OpenAI only) | ~16,000+ tokens |
+
+<Note>
+`xhigh` is only available on OpenAI models with extended reasoning. On other providers, it automatically maps to `high`.
+</Note>
+
+### Custom Token Budgets
+
+Override default token budgets for token-based providers:
+
+```typescript
+const response = await completeSimple(model, context, {
+  reasoning: 'high',
+  thinkingBudgets: {
+    minimal: 500,
+    low: 1000,
+    medium: 2000,
+    high: 4000
+  }
+});
+```
+
+## Provider-Specific Options
+
+For fine-grained control, use provider-specific options:
+
+<CodeGroup>
+```typescript OpenAI
+import { getModel, complete } from '@mariozechner/pi-ai';
+
+const model = getModel('openai', 'gpt-5-mini');
+
+const response = await complete(model, context, {
+  reasoningEffort: 'medium',  // 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+  reasoningSummary: 'detailed'  // OpenAI Responses API only (o3 models)
+});
+```
+
+```typescript Anthropic
+import { getModel, complete } from '@mariozechner/pi-ai';
+
+const model = getModel('anthropic', 'claude-sonnet-4-20250514');
+
+const response = await complete(model, context, {
+  thinkingEnabled: true,
+  thinkingBudgetTokens: 8192  // Optional token limit
+});
+```
+
+```typescript Google
+import { getModel, complete } from '@mariozechner/pi-ai';
+
+const model = getModel('google', 'gemini-2.5-flash');
+
+const response = await complete(model, context, {
+  thinking: {
+    enabled: true,
+    budgetTokens: 8192  // -1 for dynamic, 0 to disable
+  }
+});
+```
+</CodeGroup>
+
+## Streaming Thinking Content
+
+Thinking content is delivered through dedicated events:
+
+```typescript
+import { getModel, streamSimple } from '@mariozechner/pi-ai';
+
+const model = getModel('anthropic', 'claude-sonnet-4-20250514');
+const s = streamSimple(model, context, { reasoning: 'high' });
+
+for await (const event of s) {
+  switch (event.type) {
+    case 'thinking_start':
+      console.log('[Model started thinking]');
+      break;
+    
+    case 'thinking_delta':
+      // Stream thinking content in real-time
+      process.stdout.write(event.delta);
+      break;
+    
+    case 'thinking_end':
+      console.log('\n[Thinking complete]');
+      console.log('Full thinking:', event.content);
+      break;
+    
+    case 'text_start':
+      console.log('\n[Response started]');
+      break;
+    
+    case 'text_delta':
+      process.stdout.write(event.delta);
+      break;
+    
+    case 'text_end':
+      console.log('\n[Response complete]');
+      break;
+  }
+}
+
+const message = await s.result();
+console.log(`Reasoning tokens: ${message.usage.output}`);
+```
+
+## Thinking with Tool Calling
+
+Combine reasoning with tool calls:
+
+```typescript
+import { getModel, streamSimple, Type, Tool } from '@mariozechner/pi-ai';
+
+const tools: Tool[] = [{
+  name: 'calculate',
+  description: 'Perform mathematical calculations',
+  parameters: Type.Object({
+    expression: Type.String({ description: 'Math expression to evaluate' })
+  })
+}];
+
+const context = {
+  messages: [
+    { role: 'user', content: 'Calculate the area of a circle with radius 5' }
+  ],
+  tools
+};
+
+const model = getModel('anthropic', 'claude-sonnet-4-20250514');
+const s = streamSimple(model, context, { reasoning: 'medium' });
+
+for await (const event of s) {
+  if (event.type === 'thinking_delta') {
+    console.log('[Thinking]', event.delta);
+  } else if (event.type === 'text_delta') {
+    console.log('[Text]', event.delta);
+  } else if (event.type === 'toolcall_end') {
+    console.log('[Tool]', event.toolCall.name, event.toolCall.arguments);
+  }
+}
+```
+
+## Cross-Provider Handoffs
+
+Thinking blocks are preserved when switching providers:
+
+```typescript
+import { getModel, complete } from '@mariozechner/pi-ai';
+
+const context = {
+  messages: []
+};
+
+// Start with Claude (with thinking)
+const claude = getModel('anthropic', 'claude-sonnet-4-20250514');
+context.messages.push({ role: 'user', content: 'What is 25 * 18?' });
+
+const claudeResponse = await complete(claude, context, {
+  thinkingEnabled: true
+});
+context.messages.push(claudeResponse);
+
+// Switch to GPT-5 - it will see Claude's thinking as <thinking> tagged text
+const gpt5 = getModel('openai', 'gpt-5-mini');
+context.messages.push({ role: 'user', content: 'Is that calculation correct?' });
+
+const gptResponse = await complete(gpt5, context, {
+  reasoningEffort: 'medium'
+});
+context.messages.push(gptResponse);
+
+// Thinking blocks from different providers are automatically converted
+// to text with <thinking> tags for cross-provider compatibility
+```
+
+### How Cross-Provider Thinking Works
+
+- **Same provider/API**: Thinking blocks preserved as-is
+- **Different provider**: Thinking blocks converted to text with `<thinking>` tags
+- **Tool calls**: Preserved unchanged across all providers
+- **Text content**: Always preserved unchanged
+
+## Redacted Thinking
+
+Some providers may redact thinking content for safety:
+
+```typescript
+for (const block of response.content) {
+  if (block.type === 'thinking') {
+    if (block.redacted) {
+      console.log('Thinking was redacted by safety filters');
+      // block.thinkingSignature contains encrypted payload for continuity
+    } else {
+      console.log('Thinking:', block.thinking);
+    }
+  }
+}
+```
+
+## Complete Example
+
+Full workflow with reasoning:
+
+```typescript
+import { getModel, streamSimple, Type, Tool, Context } from '@mariozechner/pi-ai';
+
+const tools: Tool[] = [
+  {
+    name: 'search',
+    description: 'Search the web',
+    parameters: Type.Object({
+      query: Type.String({ description: 'Search query' })
+    })
+  },
+  {
+    name: 'calculate',
+    description: 'Perform calculations',
+    parameters: Type.Object({
+      expression: Type.String({ description: 'Math expression' })
+    })
+  }
+];
+
+const context: Context = {
+  systemPrompt: 'You are a helpful research assistant.',
+  messages: [
+    { 
+      role: 'user', 
+      content: 'How many days until the next leap year, and what will the date be?' 
+    }
+  ],
+  tools
+};
+
+const model = getModel('anthropic', 'claude-sonnet-4-20250514');
+let maxIterations = 10;
+
+while (maxIterations-- > 0) {
+  const s = streamSimple(model, context, { reasoning: 'high' });
+  
+  let thinkingContent = '';
+  let textContent = '';
+  
+  for await (const event of s) {
+    switch (event.type) {
+      case 'thinking_delta':
+        thinkingContent += event.delta;
+        process.stdout.write(event.delta);
+        break;
+      
+      case 'thinking_end':
+        console.log('\n[Thinking complete]\n');
+        break;
+      
+      case 'text_delta':
+        textContent += event.delta;
+        process.stdout.write(event.delta);
+        break;
+      
+      case 'toolcall_end':
+        console.log(`\n[Calling ${event.toolCall.name}]`);
+        break;
+    }
+  }
+  
+  const response = await s.result();
+  context.messages.push(response);
+  
+  if (response.stopReason === 'stop') {
+    console.log('\n[Complete]');
+    break;
+  }
+  
+  if (response.stopReason === 'toolUse') {
+    // Execute tools
+    for (const block of response.content) {
+      if (block.type === 'toolCall') {
+        console.log(`Executing: ${block.name}`);
+        const result = await executeTool(block.name, block.arguments);
+        
+        context.messages.push({
+          role: 'toolResult',
+          toolCallId: block.id,
+          toolName: block.name,
+          content: [{ type: 'text', text: JSON.stringify(result) }],
+          isError: false,
+          timestamp: Date.now()
+        });
+      }
+    }
+    continue;
+  }
+  
+  break;
+}
+
+console.log('\nUsage:');
+const lastMessage = context.messages[context.messages.length - 1];
+if (lastMessage.role === 'assistant') {
+  console.log(`Tokens: ${lastMessage.usage.totalTokens}`);
+  console.log(`Cost: $${lastMessage.usage.cost.total.toFixed(4)}`);
+}
+```
+
+## Cost Considerations
+
+Reasoning tokens are included in output token count:
+
+```typescript
+const response = await completeSimple(model, context, { reasoning: 'high' });
+
+console.log('Input tokens:', response.usage.input);
+console.log('Output tokens:', response.usage.output); // Includes reasoning tokens
+console.log('Total cost:', response.usage.cost.total);
+
+// For Anthropic, thinking tokens are separate from text tokens
+let thinkingTokens = 0;
+let textTokens = 0;
+
+for (const block of response.content) {
+  if (block.type === 'thinking') {
+    thinkingTokens += block.thinking.length / 4; // Rough estimate
+  } else if (block.type === 'text') {
+    textTokens += block.text.length / 4; // Rough estimate
+  }
+}
+
+console.log(`Estimated thinking tokens: ${thinkingTokens}`);
+console.log(`Estimated text tokens: ${textTokens}`);
+```
+
+<Warning>
+High reasoning levels can significantly increase token usage and costs. Use `medium` for most tasks.
+</Warning>
+
+## Provider Comparison
+
+| Provider | Thinking Format | Token Control | Streaming | Cross-Provider |
+|----------|----------------|---------------|-----------|----------------|
+| OpenAI | Effort levels | No | Yes | Converts to text |
+| Anthropic | Token budget | Yes | Yes | Converts to text |
+| Google | Token budget | Yes | Yes | Converts to text |
+| xAI | Effort levels | No | Yes | Converts to text |
+| Groq | Effort levels | No | Yes | Converts to text |
+| Cerebras | Effort levels | No | Yes | Converts to text |
+
+## Best Practices
+
+1. **Start with `medium`**: Balanced performance and cost
+2. **Use `high` for complex tasks**: Math, coding, logical reasoning
+3. **Avoid `xhigh` unless necessary**: Very expensive, only on OpenAI
+4. **Stream for UX**: Show thinking in real-time for transparency
+5. **Monitor costs**: Reasoning can 5-10x your token usage
+6. **Use unified API**: `streamSimple`/`completeSimple` for portability
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="wave-pulse" href="/ai/streaming">
+    Learn about streaming thinking events
+  </Card>
+  <Card title="Tools" icon="wrench" href="/ai/tools">
+    Combine reasoning with tool calling
+  </Card>
+</CardGroup>

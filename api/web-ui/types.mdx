@@ -1,0 +1,417 @@
+---
+title: Web UI Types
+description: Type definitions for the Web UI package
+---
+
+Core TypeScript types for the `@mariozechner/pi-web-ui` package.
+
+## Import
+
+```typescript
+import type {
+  Attachment,
+  MessageRenderer,
+  ToolRenderer,
+  SandboxRuntimeProvider,
+  ConsoleLog,
+  ArtifactMessage,
+} from "@mariozechner/pi-web-ui";
+```
+
+## Message Types
+
+### ArtifactMessage
+
+Custom message type for artifact content (HTML, SVG, etc.).
+
+```typescript
+interface ArtifactMessage {
+  role: "artifact";
+  type: "html" | "svg" | "markdown" | "text" | "image";
+  title: string;
+  content: string;
+  timestamp: number;
+}
+```
+
+Extend `CustomAgentMessages` to use in agent:
+
+```typescript
+declare module "@mariozechner/pi-agent-core" {
+  interface CustomAgentMessages {
+    artifact: ArtifactMessage;
+  }
+}
+```
+
+### UserMessageWithAttachments
+
+User message with file attachments.
+
+```typescript
+interface UserMessageWithAttachments {
+  role: "user";
+  content: string | Content[];
+  attachments?: Attachment[];
+  timestamp: number;
+}
+```
+
+## Attachment Types
+
+### Attachment
+
+File attachment data.
+
+```typescript
+interface Attachment {
+  name: string;
+  type: string;  // MIME type
+  data: string;  // base64 encoded
+  size?: number; // bytes
+}
+```
+
+### Example
+
+```typescript
+const attachment: Attachment = {
+  name: "screenshot.png",
+  type: "image/png",
+  data: "iVBORw0KGgoAAAANSUhEUgAA...",
+  size: 12345,
+};
+```
+
+## Renderer Types
+
+### MessageRenderer
+
+Custom message renderer function.
+
+```typescript
+type MessageRenderer<T = any> = (props: {
+  message: T;
+  isStreaming?: boolean;
+}) => React.ReactElement | null;
+```
+
+### Example
+
+```typescript
+import { registerMessageRenderer } from "@mariozechner/pi-web-ui";
+
+const artifactRenderer: MessageRenderer<ArtifactMessage> = ({ message }) => {
+  return (
+    <div className="artifact">
+      <h3>{message.title}</h3>
+      <div dangerouslySetInnerHTML={{ __html: message.content }} />
+    </div>
+  );
+};
+
+registerMessageRenderer("artifact", artifactRenderer);
+```
+
+### ToolRenderer
+
+Custom tool result renderer.
+
+```typescript
+interface ToolRenderResult {
+  content: React.ReactElement;
+  summary?: string;
+}
+
+type ToolRenderer = (props: {
+  toolName: string;
+  content: Content[];
+  details: any;
+  isStreaming?: boolean;
+}) => ToolRenderResult;
+```
+
+### Example
+
+```typescript
+import { registerToolRenderer } from "@mariozechner/pi-web-ui";
+
+const searchRenderer: ToolRenderer = ({ details }) => {
+  return {
+    content: (
+      <div>
+        <h4>Search Results</h4>
+        <p>Found {details.count} results</p>
+      </div>
+    ),
+    summary: `Found ${details.count} results`,
+  };
+};
+
+registerToolRenderer("search", searchRenderer);
+```
+
+## Sandbox Types
+
+### SandboxRuntimeProvider
+
+Runtime provider for sandboxed code execution.
+
+```typescript
+interface SandboxRuntimeProvider {
+  name: string;
+  description: string;
+  provideRuntime: (iframe: HTMLIFrameElement) => void;
+}
+```
+
+### ConsoleLog
+
+Console log entry.
+
+```typescript
+interface ConsoleLog {
+  type: "log" | "error" | "warn" | "info";
+  message: string;
+  timestamp?: number;
+}
+```
+
+### DownloadableFile
+
+File available for download from sandbox.
+
+```typescript
+interface DownloadableFile {
+  name: string;
+  content: string | Blob;
+  mimeType: string;
+}
+```
+
+## Storage Types
+
+### SessionData
+
+Session data stored in IndexedDB.
+
+```typescript
+interface SessionData {
+  id: string;
+  name?: string;
+  messages: AgentMessage[];
+  model: Model;
+  thinkingLevel: ThinkingLevel;
+  timestamp: number;
+  lastModified: number;
+}
+```
+
+### SessionMetadata
+
+Session metadata for list display.
+
+```typescript
+interface SessionMetadata {
+  id: string;
+  name?: string;
+  timestamp: number;
+  lastModified: number;
+  messageCount: number;
+}
+```
+
+## Settings Types
+
+### CustomProvider
+
+Custom API provider configuration.
+
+```typescript
+interface CustomProvider {
+  id: string;
+  name: string;
+  type: CustomProviderType;
+  baseUrl: string;
+  apiKey?: string;
+  models?: string[];
+}
+```
+
+### CustomProviderType
+
+```typescript
+type CustomProviderType = "openai" | "anthropic" | "openai-compatible" | "auto-discovery";
+```
+
+## Component Props Types
+
+### ChatPanelProps
+
+```typescript
+interface ChatPanelProps {
+  agent: Agent;
+  onSendMessage: (text: string, attachments?: Attachment[]) => void;
+  theme?: "light" | "dark";
+  className?: string;
+}
+```
+
+### AgentInterfaceProps
+
+```typescript
+interface AgentInterfaceProps {
+  agent: Agent;
+  onSendMessage: (text: string, attachments?: Attachment[]) => void;
+  showSidebar?: boolean;
+  enableAttachments?: boolean;
+  onOpenSettings?: () => void;
+  onOpenModelSelector?: () => void;
+}
+```
+
+### MessageListProps
+
+```typescript
+interface MessageListProps {
+  messages: AgentMessage[];
+  streamMessage?: AgentMessage | null;
+  className?: string;
+}
+```
+
+### InputProps
+
+```typescript
+interface InputProps {
+  onSubmit: (text: string, attachments?: Attachment[]) => void;
+  placeholder?: string;
+  enableAttachments?: boolean;
+  disabled?: boolean;
+  className?: string;
+}
+```
+
+### ModelSelectorProps
+
+```typescript
+interface ModelSelectorProps {
+  open: boolean;
+  onClose: () => void;
+  currentModel: Model;
+  onSelectModel: (model: Model, thinkingLevel: ThinkingLevel) => void;
+}
+```
+
+### SettingsDialogProps
+
+```typescript
+interface SettingsDialogProps {
+  open: boolean;
+  onClose: () => void;
+  tabs?: string[];
+}
+```
+
+## Example: Type-Safe Usage
+
+```typescript
+import type {
+  Attachment,
+  MessageRenderer,
+  ToolRenderer,
+  ArtifactMessage,
+  SessionData,
+} from "@mariozechner/pi-web-ui";
+import { Agent } from "@mariozechner/pi-agent-core";
+import { getModel } from "@mariozechner/pi-ai";
+
+// Custom message type
+declare module "@mariozechner/pi-agent-core" {
+  interface CustomAgentMessages {
+    artifact: ArtifactMessage;
+  }
+}
+
+// Type-safe attachment
+const attachment: Attachment = {
+  name: "file.txt",
+  type: "text/plain",
+  data: btoa("Hello, world!"),
+};
+
+// Type-safe message renderer
+const artifactRenderer: MessageRenderer<ArtifactMessage> = ({ message }) => {
+  return <div>{message.content}</div>;
+};
+
+// Type-safe tool renderer
+const searchRenderer: ToolRenderer = ({ details }) => {
+  return {
+    content: <div>Found {details.count} results</div>,
+    summary: `${details.count} results`,
+  };
+};
+
+// Type-safe session data
+const session: SessionData = {
+  id: "session-123",
+  name: "My Chat",
+  messages: [],
+  model: getModel("anthropic", "claude-4.5-sonnet-20250514"),
+  thinkingLevel: "medium",
+  timestamp: Date.now(),
+  lastModified: Date.now(),
+};
+```
+
+## Storage Backend Types
+
+### StorageBackend
+
+Generic storage interface.
+
+```typescript
+interface StorageBackend {
+  get<T>(key: string): Promise<T | undefined>;
+  set<T>(key: string, value: T): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(): Promise<string[]>;
+}
+```
+
+### IndexedDBConfig
+
+IndexedDB configuration.
+
+```typescript
+interface IndexedDBConfig {
+  databaseName: string;
+  version: number;
+  stores: StoreConfig[];
+}
+```
+
+### StoreConfig
+
+IndexedDB store configuration.
+
+```typescript
+interface StoreConfig {
+  name: string;
+  keyPath: string;
+  indexes?: IndexConfig[];
+}
+```
+
+### IndexConfig
+
+IndexedDB index configuration.
+
+```typescript
+interface IndexConfig {
+  name: string;
+  keyPath: string | string[];
+  unique?: boolean;
+}
+```

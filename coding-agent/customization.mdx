@@ -1,0 +1,508 @@
+---
+title: "Customization"
+description: "Settings, configuration, and customization options for Pi coding agent"
+---
+
+Pi uses JSON settings files with project settings overriding global settings. Edit directly or use `/settings` for common options.
+
+## Settings Files
+
+<Tabs>
+  <Tab title="Global Settings">
+    **Location:** `~/.pi/agent/settings.json`
+    
+    Applies to all projects and sessions.
+    
+    ```json
+    {
+      "defaultProvider": "anthropic",
+      "defaultModel": "claude-sonnet-4-20250514",
+      "theme": "dark",
+      "packages": ["pi-skills"]
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Project Settings">
+    **Location:** `.pi/settings.json`
+    
+    Applies to the current project. Overrides global settings.
+    
+    ```json
+    {
+      "defaultModel": "gpt-4o",
+      "theme": "light",
+      "extensions": ["./extensions/deploy.ts"]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Merging Behavior
+
+Project settings override global settings. Nested objects are **merged**:
+
+```json
+// Global: ~/.pi/agent/settings.json
+{
+  "theme": "dark",
+  "compaction": { "enabled": true, "reserveTokens": 16384 }
+}
+
+// Project: .pi/settings.json
+{
+  "compaction": { "reserveTokens": 8192 }
+}
+
+// Result
+{
+  "theme": "dark",
+  "compaction": { "enabled": true, "reserveTokens": 8192 }
+}
+```
+
+## Model & Thinking
+
+<ParamField path="defaultProvider" type="string">
+  Default provider (e.g., `"anthropic"`, `"openai"`)
+</ParamField>
+
+<ParamField path="defaultModel" type="string">
+  Default model ID
+</ParamField>
+
+<ParamField path="defaultThinkingLevel" type="string">
+  Default thinking level: `"off"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`
+</ParamField>
+
+<ParamField path="hideThinkingBlock" type="boolean" default="false">
+  Hide thinking blocks in output
+</ParamField>
+
+<ParamField path="thinkingBudgets" type="object">
+  Custom token budgets per thinking level
+  
+  ```json
+  {
+    "thinkingBudgets": {
+      "minimal": 1024,
+      "low": 4096,
+      "medium": 10240,
+      "high": 32768
+    }
+  }
+  ```
+</ParamField>
+
+## UI & Display
+
+<ParamField path="theme" type="string" default="dark">
+  Theme name (`"dark"`, `"light"`, or custom theme)
+</ParamField>
+
+<ParamField path="quietStartup" type="boolean" default="false">
+  Hide startup header
+</ParamField>
+
+<ParamField path="collapseChangelog" type="boolean" default="false">
+  Show condensed changelog after updates
+</ParamField>
+
+<ParamField path="doubleEscapeAction" type="string" default="tree">
+  Action for double-escape: `"tree"`, `"fork"`, or `"none"`
+</ParamField>
+
+<ParamField path="editorPaddingX" type="number" default="0">
+  Horizontal padding for input editor (0-3)
+</ParamField>
+
+<ParamField path="autocompleteMaxVisible" type="number" default="5">
+  Max visible items in autocomplete dropdown (3-20)
+</ParamField>
+
+<ParamField path="showHardwareCursor" type="boolean" default="false">
+  Show terminal hardware cursor
+</ParamField>
+
+## Compaction
+
+<ParamField path="compaction.enabled" type="boolean" default="true">
+  Enable automatic compaction
+</ParamField>
+
+<ParamField path="compaction.reserveTokens" type="number" default="16384">
+  Tokens reserved for LLM response
+</ParamField>
+
+<ParamField path="compaction.keepRecentTokens" type="number" default="20000">
+  Recent tokens to keep (not summarized)
+</ParamField>
+
+**Example:**
+```json
+{
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  }
+}
+```
+
+## Branch Summary
+
+<ParamField path="branchSummary.reserveTokens" type="number" default="16384">
+  Tokens reserved for branch summarization when switching branches via `/tree`
+</ParamField>
+
+## Retry
+
+<ParamField path="retry.enabled" type="boolean" default="true">
+  Enable automatic retry on transient errors
+</ParamField>
+
+<ParamField path="retry.maxRetries" type="number" default="3">
+  Maximum retry attempts
+</ParamField>
+
+<ParamField path="retry.baseDelayMs" type="number" default="2000">
+  Base delay for exponential backoff (2s, 4s, 8s)
+</ParamField>
+
+<ParamField path="retry.maxDelayMs" type="number" default="60000">
+  Max server-requested delay before failing (60s)
+  
+  When a provider requests a retry delay longer than this (e.g., "quota resets in 5 hours"), the request fails immediately with an informative error. Set to `0` to disable the cap.
+</ParamField>
+
+**Example:**
+```json
+{
+  "retry": {
+    "enabled": true,
+    "maxRetries": 3,
+    "baseDelayMs": 2000,
+    "maxDelayMs": 60000
+  }
+}
+```
+
+## Message Delivery
+
+<ParamField path="steeringMode" type="string" default="one-at-a-time">
+  How steering messages are sent: `"all"` or `"one-at-a-time"`
+</ParamField>
+
+<ParamField path="followUpMode" type="string" default="one-at-a-time">
+  How follow-up messages are sent: `"all"` or `"one-at-a-time"`
+</ParamField>
+
+<ParamField path="transport" type="string" default="sse">
+  Preferred transport: `"sse"`, `"websocket"`, or `"auto"`
+  
+  For providers that support multiple transports.
+</ParamField>
+
+## Terminal & Images
+
+<ParamField path="terminal.showImages" type="boolean" default="true">
+  Show images in terminal (if supported)
+</ParamField>
+
+<ParamField path="terminal.clearOnShrink" type="boolean" default="false">
+  Clear empty rows when content shrinks (can cause flicker)
+</ParamField>
+
+<ParamField path="images.autoResize" type="boolean" default="true">
+  Resize images to 2000x2000 max before sending
+</ParamField>
+
+<ParamField path="images.blockImages" type="boolean" default="false">
+  Block all images from being sent to LLM
+</ParamField>
+
+## Shell
+
+<ParamField path="shellPath" type="string">
+  Custom shell path (e.g., for Cygwin on Windows)
+</ParamField>
+
+<ParamField path="shellCommandPrefix" type="string">
+  Prefix for every bash command (e.g., `"shopt -s expand_aliases"`)
+  
+  Useful for loading shell configuration:
+  ```json
+  {
+    "shellCommandPrefix": "source ~/.bashrc"
+  }
+  ```
+</ParamField>
+
+## Model Cycling
+
+<ParamField path="enabledModels" type="string[]">
+  Model patterns for Ctrl+P cycling (same format as `--models` CLI flag)
+  
+  ```json
+  {
+    "enabledModels": ["claude-*", "gpt-4o", "gemini-2*"]
+  }
+  ```
+  
+  Use wildcards to match multiple models. Ctrl+P cycles through matched models.
+</ParamField>
+
+## Markdown
+
+<ParamField path="markdown.codeBlockIndent" type="string" default="  ">
+  Indentation for code blocks (default: two spaces)
+</ParamField>
+
+## Resources
+
+These settings define where to load extensions, skills, prompts, and themes.
+
+### Path Resolution
+
+- Paths in `~/.pi/agent/settings.json` resolve relative to `~/.pi/agent`
+- Paths in `.pi/settings.json` resolve relative to `.pi`
+- Absolute paths and `~` are supported
+
+### Packages
+
+<ParamField path="packages" type="array" default="[]">
+  npm/git packages to load resources from
+  
+  **String form** (loads all resources):
+  ```json
+  {
+    "packages": ["pi-skills", "@org/my-extension"]
+  }
+  ```
+  
+  **Object form** (filters resources):
+  ```json
+  {
+    "packages": [
+      {
+        "source": "pi-skills",
+        "skills": ["brave-search", "transcribe"],
+        "extensions": []
+      }
+    ]
+  }
+  ```
+</ParamField>
+
+### Extensions
+
+<ParamField path="extensions" type="string[]" default="[]">
+  Local extension file paths or directories
+  
+  ```json
+  {
+    "extensions": [
+      "./extensions",
+      "../shared/extensions/deploy.ts",
+      "~/common-extensions"
+    ]
+  }
+  ```
+</ParamField>
+
+### Skills
+
+<ParamField path="skills" type="string[]" default="[]">
+  Local skill file paths or directories
+  
+  ```json
+  {
+    "skills": [
+      "./skills",
+      "~/.claude/skills"
+    ]
+  }
+  ```
+</ParamField>
+
+<ParamField path="enableSkillCommands" type="boolean" default="true">
+  Register skills as `/skill:name` commands
+</ParamField>
+
+### Prompts
+
+<ParamField path="prompts" type="string[]" default="[]">
+  Local prompt template paths or directories
+  
+  ```json
+  {
+    "prompts": ["./prompts", "../shared/prompts"]
+  }
+  ```
+</ParamField>
+
+### Themes
+
+<ParamField path="themes" type="string[]" default="[]">
+  Local theme file paths or directories
+  
+  ```json
+  {
+    "themes": ["./themes", "~/my-themes"]
+  }
+  ```
+</ParamField>
+
+### Glob Patterns
+
+Arrays support glob patterns and exclusions:
+
+```json
+{
+  "extensions": [
+    "extensions/*.ts",
+    "!extensions/disabled.ts",
+    "+extensions/legacy.ts",
+    "-extensions/broken.ts"
+  ]
+}
+```
+
+- `pattern` - Glob match
+- `!pattern` - Exclude matches
+- `+path` - Force-include exact path
+- `-path` - Force-exclude exact path
+
+## Complete Example
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/core/settings-schema.json",
+  
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-sonnet-4-20250514",
+  "defaultThinkingLevel": "medium",
+  
+  "theme": "dark",
+  "quietStartup": false,
+  "editorPaddingX": 1,
+  
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  },
+  
+  "retry": {
+    "enabled": true,
+    "maxRetries": 3,
+    "baseDelayMs": 2000,
+    "maxDelayMs": 60000
+  },
+  
+  "steeringMode": "one-at-a-time",
+  "followUpMode": "one-at-a-time",
+  "transport": "sse",
+  
+  "enabledModels": ["claude-*", "gpt-4o"],
+  
+  "packages": ["pi-skills"],
+  "extensions": ["./extensions"],
+  "skills": ["./skills"],
+  "prompts": ["./prompts"],
+  "themes": ["./themes"]
+}
+```
+
+The `$schema` field enables editor auto-completion and validation.
+
+## Interactive Settings
+
+Use `/settings` to modify common options in interactive mode:
+
+```bash
+/settings
+```
+
+This opens a TUI settings menu where you can:
+
+- Change thinking level
+- Switch themes
+- Configure message delivery
+- Set transport preference
+- Toggle compaction
+- And more...
+
+Changes are saved to the appropriate settings file based on scope.
+
+## Keybindings
+
+Customize keyboard shortcuts via `~/.pi/agent/keybindings.json`:
+
+```json
+{
+  "clear": "ctrl+l",
+  "cycleModelForward": "ctrl+m",
+  "cycleModelBackward": "ctrl+shift+m",
+  "selectModel": "ctrl+p",
+  "expandTools": "ctrl+e",
+  "toggleThinking": "ctrl+t"
+}
+```
+
+Available actions:
+
+**App actions:**
+- `interrupt`, `clear`, `exit`, `suspend`
+- `cycleThinkingLevel`
+- `cycleModelForward`, `cycleModelBackward`, `selectModel`
+- `expandTools`, `toggleThinking`
+- `externalEditor`
+- `followUp`, `dequeue`
+- `pasteImage`
+- `newSession`, `tree`, `fork`, `resume`
+
+**Editor actions:**
+- Standard text editing actions (see `packages/tui` documentation)
+
+See all available actions in `packages/coding-agent/src/core/keybindings.ts`.
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `PI_CODING_AGENT_DIR` | Override config directory (default: `~/.pi/agent`) |
+| `PI_PACKAGE_DIR` | Override package directory |
+| `PI_SKIP_VERSION_CHECK` | Skip version check at startup |
+| `PI_CACHE_RETENTION` | Set to `long` for extended prompt cache (Anthropic: 1h, OpenAI: 24h) |
+| `VISUAL`, `EDITOR` | External editor for Ctrl+G |
+
+**Example:**
+```bash
+export PI_CODING_AGENT_DIR=~/my-pi-config
+export PI_CACHE_RETENTION=long
+export EDITOR=vim
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Extensions" icon="puzzle-piece" href="/coding-agent/extensions">
+    Build TypeScript extensions
+  </Card>
+  <Card title="Skills" icon="book" href="/coding-agent/skills">
+    Create Agent Skills
+  </Card>
+  <Card title="Prompt Templates" icon="file-lines" href="/coding-agent/prompt-templates">
+    Make reusable prompts
+  </Card>
+  <Card title="Themes" icon="palette" href="/coding-agent/themes">
+    Customize colors
+  </Card>
+  <Card title="Pi Packages" icon="box" href="/coding-agent/pi-packages">
+    Share via npm/git
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/coding-agent/cli-reference">
+    All CLI flags
+  </Card>
+</CardGroup>

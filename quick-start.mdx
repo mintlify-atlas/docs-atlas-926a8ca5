@@ -1,0 +1,580 @@
+---
+title: "Quick Start"
+description: "Get up and running with Pi in under 5 minutes"
+---
+
+## Overview
+
+This guide walks through using the Pi coding agent CLI to interact with an LLM. You'll:
+
+1. Install the coding agent
+2. Authenticate with a provider
+3. Run your first interactive session
+4. Try file operations and bash commands
+5. Explore customization options
+
+<Note>
+  **Time to Complete:** 5 minutes  
+  **Prerequisites:** Node.js 20+, API key or OAuth subscription
+</Note>
+
+## Installation
+
+Install the coding agent globally:
+
+```bash
+npm install -g @mariozechner/pi-coding-agent
+```
+
+Verify installation:
+
+```bash
+pi --version
+# Output: 0.55.3 (or latest version)
+```
+
+## Authentication
+
+Choose your authentication method:
+
+<Tabs>
+  <Tab title="API Key (Quick)">
+    Set an environment variable for your provider:
+    
+    ```bash
+    # Anthropic (recommended for getting started)
+    export ANTHROPIC_API_KEY=sk-ant-...
+    
+    # Or OpenAI
+    export OPENAI_API_KEY=sk-...
+    
+    # Or any other provider - see full list
+    pi --list-models
+    ```
+    
+    <Tip>
+      **Don't have an API key?** Get one from:
+      - [Anthropic](https://console.anthropic.com/) - Free credits available
+      - [OpenAI](https://platform.openai.com/) - Pay as you go
+      - [Groq](https://console.groq.com/) - Free tier with fast inference
+    </Tip>
+  </Tab>
+  
+  <Tab title="OAuth (Subscriptions)">
+    If you have a Claude Pro, ChatGPT Plus, or GitHub Copilot subscription:
+    
+    ```bash
+    pi
+    /login  # In the Pi interface, select your provider
+    ```
+    
+    Or authenticate before starting:
+    
+    ```bash
+    npx @mariozechner/pi-ai login anthropic
+    npx @mariozechner/pi-ai login openai-codex
+    npx @mariozechner/pi-ai login github-copilot
+    ```
+  </Tab>
+</Tabs>
+
+## Your First Session
+
+<Steps>
+  <Step title="Start Pi">
+    Launch the interactive interface:
+    
+    ```bash
+    pi
+    ```
+    
+    You'll see the Pi interface with:
+    - **Header:** Keyboard shortcuts and loaded configuration
+    - **Messages area:** Conversation history
+    - **Editor:** Where you type (bottom of screen)
+    - **Footer:** Working directory, session, tokens, cost, model
+    
+    <Frame>
+      <img src="/images/interactive-mode.png" alt="Pi Interactive Mode" />
+    </Frame>
+  </Step>
+  
+  <Step title="Send a Message">
+    Type in the editor and press **Enter**:
+    
+    ```
+    Hello! Can you help me understand what you can do?
+    ```
+    
+    The model will respond with its capabilities. Watch the footer to see:
+    - **Tokens used** (input + output)
+    - **Cost** (accumulated for session)
+    - **Context usage** (how full the context window is)
+  </Step>
+  
+  <Step title="Try File Operations">
+    Pi has built-in tools: `read`, `write`, `edit`, and `bash`. Try:
+    
+    ```
+    Create a simple Python hello world script in hello.py
+    ```
+    
+    You'll see:
+    1. The model calls the `write` tool
+    2. Tool execution creates `hello.py`
+    3. Model responds confirming creation
+    
+    Verify the file was created:
+    ```
+    Show me what's in hello.py
+    ```
+  </Step>
+  
+  <Step title="Execute Commands">
+    Run the script you just created:
+    
+    ```
+    Run the hello.py script
+    ```
+    
+    The model will use the `bash` tool to execute:
+    ```bash
+    python hello.py
+    ```
+    
+    <Tip>
+      You can also run bash commands directly from the editor:
+      - `!python hello.py` - Runs command and sends output to LLM
+      - `!!ls -la` - Runs command without sending output to LLM
+    </Tip>
+  </Step>
+</Steps>
+
+## Editor Features
+
+The Pi editor has several helpful features:
+
+<AccordionGroup>
+  <Accordion title="Multi-line Input">
+    Press **Shift+Enter** (or **Ctrl+Enter** on Windows Terminal) for new lines:
+    
+    ```
+    Create a function that:
+    - Takes a list of numbers
+    - Returns the average
+    - Handles empty lists gracefully
+    ```
+  </Accordion>
+  
+  <Accordion title="File References">
+    Type `@` to fuzzy-search and reference files:
+    
+    ```
+    Review @src/main.ts and suggest improvements
+    ```
+    
+    The file content will be included in the message automatically.
+  </Accordion>
+  
+  <Accordion title="Image Attachments">
+    Paste images with **Ctrl+V** (or **Alt+V** on Windows) or drag onto terminal:
+    
+    ```
+    What's in this screenshot?
+    ```
+    
+    <Note>
+      Only works with vision-capable models like GPT-4o, Claude Sonnet, or Gemini.
+    </Note>
+  </Accordion>
+  
+  <Accordion title="Bash Commands">
+    Execute commands directly from the editor:
+    
+    - `!ls -la` - Run and send output to model
+    - `!!git status` - Run without sending output
+    
+    Useful for checking state before asking questions:
+    ```
+    !git diff
+    Explain these changes and suggest a commit message
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Essential Keyboard Shortcuts
+
+<div className="grid grid-cols-2 gap-4">
+  <div>
+    **Navigation**
+    - `Ctrl+L` - Switch model
+    - `Shift+Tab` - Cycle thinking level
+    - `Ctrl+P` / `Shift+Ctrl+P` - Cycle models
+  </div>
+  <div>
+    **Control**
+    - `Escape` - Cancel/abort
+    - `Escape` twice - Open session tree
+    - `Ctrl+C` - Clear editor
+    - `Ctrl+C` twice - Quit Pi
+  </div>
+  <div>
+    **View**
+    - `Ctrl+O` - Toggle tool output
+    - `Ctrl+T` - Toggle thinking blocks
+  </div>
+  <div>
+    **Session**
+    - `/tree` - Navigate session history
+    - `/new` - Start new session
+    - `/resume` - Load previous session
+  </div>
+</div>
+
+<Tip>
+  Type `/hotkeys` in the editor to see the complete list of keyboard shortcuts.
+</Tip>
+
+## Commands
+
+Type `/` in the editor to see available commands:
+
+<CodeGroup>
+
+```bash Model & Settings
+/model              # Switch LLM model
+/scoped-models      # Choose which models appear in Ctrl+P
+/settings           # Configure thinking, theme, transport
+```
+
+```bash Session Management
+/new                # Start fresh session
+/resume             # Pick from previous sessions
+/name my-project    # Name current session
+/tree               # Navigate session tree (branching)
+/fork               # Create new session from current point
+```
+
+```bash Sharing & Export
+/copy               # Copy last assistant message
+/export out.html    # Export session to HTML
+/share              # Upload as GitHub gist with shareable link
+```
+
+```bash Utilities
+/compact            # Manually compact context
+/reload             # Reload extensions/skills/prompts
+/changelog          # Show version history
+/quit               # Exit Pi
+```
+
+</CodeGroup>
+
+## Non-Interactive Usage
+
+Run Pi without the interactive interface:
+
+<CodeGroup>
+
+```bash Print Mode
+# Get response and exit
+pi -p "Explain how async/await works"
+
+# With files
+pi -p @README.md "Summarize this documentation"
+
+# With images
+pi -p @screenshot.png "What's in this image?"
+```
+
+```bash JSON Mode
+# Output events as JSON lines
+pi --mode json "Hello"
+
+# Useful for scripting
+pi --mode json "List files" | grep -E '"type":"text_delta"'
+```
+
+```bash Specific Model
+# Use different provider
+pi --provider openai --model gpt-4o "Hello"
+
+# Or use provider/model syntax
+pi --model openai/gpt-4o "Hello"
+
+# With thinking level
+pi --model sonnet:high "Solve this complex problem"
+```
+
+```bash Read-Only Mode
+# Disable write/edit/bash tools
+pi --tools read,grep,find,ls -p "Analyze the codebase"
+```
+
+</CodeGroup>
+
+## Programmatic Usage (SDK)
+
+For building custom applications:
+
+<CodeGroup>
+
+```javascript LLM API Only
+import { getModel, stream } from '@mariozechner/pi-ai';
+
+const model = getModel('anthropic', 'claude-sonnet-4-20250514');
+
+const s = stream(model, {
+  messages: [{ role: 'user', content: 'Hello!' }]
+}, {
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+for await (const event of s) {
+  if (event.type === 'text_delta') {
+    process.stdout.write(event.delta);
+  }
+}
+```
+
+```javascript Agent Runtime
+import { Agent } from '@mariozechner/pi-agent-core';
+import { getModel } from '@mariozechner/pi-ai';
+
+const agent = new Agent({
+  initialState: {
+    systemPrompt: 'You are helpful.',
+    model: getModel('anthropic', 'claude-sonnet-4-20250514'),
+    messages: [],
+    tools: []
+  }
+});
+
+agent.subscribe((event) => {
+  if (event.type === 'message_update') {
+    console.log(event.assistantMessageEvent);
+  }
+});
+
+await agent.prompt('Hello!');
+```
+
+```javascript Coding Agent SDK
+import { 
+  createAgentSession,
+  SessionManager,
+  AuthStorage,
+  ModelRegistry
+} from '@mariozechner/pi-coding-agent';
+
+const authStorage = AuthStorage.create();
+const { session } = await createAgentSession({
+  sessionManager: SessionManager.inMemory(),
+  authStorage,
+  modelRegistry: new ModelRegistry(authStorage)
+});
+
+await session.prompt('What files are in this directory?');
+```
+
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Interactive Mode Guide"
+    icon="terminal"
+    href="/coding-agent/interactive-mode"
+  >
+    Master keyboard shortcuts, commands, and the message queue
+  </Card>
+  <Card
+    title="Sessions & Branching"
+    icon="code-branch"
+    href="/coding-agent/sessions"
+  >
+    Learn session management and the tree view for exploring conversation branches
+  </Card>
+  <Card
+    title="Customization"
+    icon="palette"
+    href="/coding-agent/customization"
+  >
+    Add extensions, skills, prompt templates, and themes
+  </Card>
+  <Card
+    title="LLM Providers"
+    icon="plug"
+    href="/ai/providers"
+  >
+    Connect to 15+ providers and configure custom models
+  </Card>
+  <Card
+    title="Building Extensions"
+    icon="puzzle-piece"
+    href="/guides/building-extensions"
+  >
+    Extend Pi with custom tools, commands, and UI
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api/ai/stream"
+  >
+    Explore the complete programmatic API
+  </Card>
+</CardGroup>
+
+## Common Questions
+
+<AccordionGroup>
+  <Accordion title="How do I switch models?">
+    Press **Ctrl+L** in the interactive mode, or use `/model`. 
+    
+    To cycle through favorite models, use **Ctrl+P** and **Shift+Ctrl+P**. Configure which models appear with `/scoped-models`.
+  </Accordion>
+  
+  <Accordion title="How do I save my session?">
+    Sessions auto-save to `~/.pi/agent/sessions/` organized by working directory. 
+    
+    Continue the most recent session with `pi -c` or browse all sessions with `pi -r`.
+  </Accordion>
+  
+  <Accordion title="How do I use multiple providers?">
+    Set API keys for multiple providers in your environment:
+    ```bash
+    export ANTHROPIC_API_KEY=...
+    export OPENAI_API_KEY=...
+    export GROQ_API_KEY=...
+    ```
+    
+    Switch between them with **Ctrl+L** or `/model` command.
+  </Accordion>
+  
+  <Accordion title="Can I customize the system prompt?">
+    Yes, create `.pi/SYSTEM.md` (project-specific) or `~/.pi/agent/SYSTEM.md` (global).
+    
+    Or append without replacing via `APPEND_SYSTEM.md`.
+  </Accordion>
+  
+  <Accordion title="How do I add custom tools?">
+    Create a TypeScript extension in `~/.pi/agent/extensions/` or `.pi/extensions/`:
+    
+    ```typescript
+    export default function(pi) {
+      pi.registerTool({
+        name: 'my_tool',
+        description: 'Does something useful',
+        parameters: Type.Object({ ... }),
+        execute: async (params) => { ... }
+      });
+    }
+    ```
+    
+    See [Building Extensions](/guides/building-extensions) for details.
+  </Accordion>
+  
+  <Accordion title="What's the difference between extensions and skills?">
+    **Extensions** are TypeScript modules that add tools, commands, UI, and event handlers. They have full access to the Pi API.
+    
+    **Skills** are Markdown files that provide on-demand instructions to the model. They follow the [Agent Skills](https://agentskills.io) standard.
+    
+    Use extensions for functionality, skills for guidance.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="'pi: command not found'">
+    The global install path isn't in your PATH. Either:
+    
+    1. Use npx: `npx @mariozechner/pi-coding-agent`
+    2. Or fix npm global path:
+       ```bash
+       npm config set prefix ~/.npm-global
+       echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+       source ~/.bashrc
+       ```
+  </Accordion>
+  
+  <Accordion title="API key not recognized">
+    Verify the environment variable:
+    ```bash
+    echo $ANTHROPIC_API_KEY  # Should output your key
+    ```
+    
+    Or pass it explicitly:
+    ```bash
+    pi --api-key sk-ant-... "Hello"
+    ```
+  </Accordion>
+  
+  <Accordion title="Terminal rendering issues">
+    Ensure your terminal supports 256 colors and Unicode:
+    ```bash
+    echo $TERM  # Should be xterm-256color or similar
+    ```
+    
+    For Windows, use Windows Terminal instead of cmd.exe.
+    
+    See [terminal setup guide](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md).
+  </Accordion>
+  
+  <Accordion title="Context overflow errors">
+    Long sessions may exceed the model's context window. Pi handles this with automatic compaction:
+    
+    - **Manual:** `/compact` or `/compact <custom instructions>`
+    - **Automatic:** Enabled by default in `/settings`
+    
+    Or start a fresh session with `/new`.
+  </Accordion>
+</AccordionGroup>
+
+## Learn More
+
+<CardGroup cols={3}>
+  <Card
+    title="Core Concepts"
+    icon="book"
+    href="/concepts/architecture"
+  >
+    Understand the architecture
+  </Card>
+  <Card
+    title="LLM Tools"
+    icon="wrench"
+    href="/ai/tools"
+  >
+    Function calling and validation
+  </Card>
+  <Card
+    title="Agent Events"
+    icon="bell"
+    href="/agent/overview"
+  >
+    Event-driven agent architecture
+  </Card>
+  <Card
+    title="SDK Guide"
+    icon="code"
+    href="/guides/programmatic-usage"
+  >
+    Build custom applications
+  </Card>
+  <Card
+    title="Examples"
+    icon="lightbulb"
+    href="https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent/examples"
+  >
+    Browse code examples
+  </Card>
+  <Card
+    title="Community"
+    icon="discord"
+    href="https://discord.com/invite/3cU7Bz4UPx"
+  >
+    Join the Discord
+  </Card>
+</CardGroup>

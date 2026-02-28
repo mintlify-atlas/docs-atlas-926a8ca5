@@ -1,0 +1,486 @@
+---
+title: Adding Custom LLM Providers
+description: Register custom model providers with Pi using extensions for proxies, custom endpoints, and OAuth flows
+---
+
+Extensions can register custom model providers via `pi.registerProvider()`. This enables proxies, self-hosted deployments, OAuth/SSO authentication, and custom API implementations.
+
+## Quick Start
+
+Create an extension that registers a provider:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerProvider("my-provider", {
+    baseUrl: "https://api.example.com",
+    apiKey: "MY_API_KEY",
+    api: "openai-completions",
+    models: [
+      {
+        id: "my-model",
+        name: "My Model",
+        reasoning: false,
+        input: ["text", "image"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 4096
+      }
+    ]
+  });
+}
+```
+
+## Use Cases
+
+<Tabs>
+  <Tab title="Proxy">
+    Redirect an existing provider through a corporate proxy:
+
+    ```typescript
+    pi.registerProvider("anthropic", {
+      baseUrl: "https://proxy.example.com"
+    });
+    ```
+  </Tab>
+  <Tab title="Custom Endpoint">
+    Add a self-hosted or private deployment:
+
+    ```typescript
+    pi.registerProvider("my-llm", {
+      baseUrl: "https://api.my-llm.com/v1",
+      apiKey: "MY_LLM_API_KEY",
+      api: "openai-completions",
+      models: [/* ... */]
+    });
+    ```
+  </Tab>
+  <Tab title="OAuth/SSO">
+    Add enterprise authentication:
+
+    ```typescript
+    pi.registerProvider("corporate-ai", {
+      baseUrl: "https://ai.corp.com/v1",
+      api: "openai-responses",
+      models: [/* ... */],
+      oauth: {
+        name: "Corporate AI (SSO)",
+        async login(callbacks) { /* ... */ },
+        async refreshToken(cred) { /* ... */ },
+        getApiKey(cred) { return cred.access; }
+      }
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Override Existing Provider
+
+<Steps>
+
+### Redirect Through Proxy
+
+Change the base URL for all requests:
+
+```typescript
+pi.registerProvider("anthropic", {
+  baseUrl: "https://proxy.example.com"
+});
+```
+
+### Add Custom Headers
+
+Add authentication or routing headers:
+
+```typescript
+pi.registerProvider("openai", {
+  headers: {
+    "X-Custom-Header": "value"
+  }
+});
+```
+
+### Both URL and Headers
+
+Combine for full customization:
+
+```typescript
+pi.registerProvider("google", {
+  baseUrl: "https://ai-gateway.corp.com/google",
+  headers: {
+    "X-Corp-Auth": "CORP_AUTH_TOKEN"
+  }
+});
+```
+
+</Steps>
+
+<Note>
+When only `baseUrl` and/or `headers` are provided (no `models`), all existing models for that provider are preserved with the new endpoint.
+</Note>
+
+## Register New Provider
+
+<Steps>
+
+### Choose API Type
+
+Pi supports multiple streaming APIs:
+
+| API | Use for |
+|-----|------|
+| `anthropic-messages` | Anthropic Claude API and compatibles |
+| `openai-completions` | OpenAI Chat Completions API and compatibles |
+| `openai-responses` | OpenAI Responses API |
+| `google-generative-ai` | Google Generative AI API |
+| `google-vertex` | Google Vertex AI API |
+| `bedrock-converse-stream` | Amazon Bedrock Converse API |
+
+Most OpenAI-compatible providers work with `openai-completions`.
+
+### Define Models
+
+Specify models with full metadata:
+
+```typescript
+pi.registerProvider("my-llm", {
+  baseUrl: "https://api.my-llm.com/v1",
+  apiKey: "MY_LLM_API_KEY",
+  api: "openai-completions",
+  models: [
+    {
+      id: "my-llm-large",
+      name: "My LLM Large",
+      reasoning: true,
+      input: ["text", "image"],
+      cost: {
+        input: 3.0,           // $/million tokens
+        output: 15.0,
+        cacheRead: 0.3,
+        cacheWrite: 3.75
+      },
+      contextWindow: 200000,
+      maxTokens: 16384
+    }
+  ]
+});
+```
+
+### Handle Compatibility
+
+Use `compat` for provider quirks:
+
+```typescript
+models: [{
+  id: "custom-model",
+  // ...
+  compat: {
+    supportsDeveloperRole: false,      // use "system" instead
+    supportsReasoningEffort: false,    // disable reasoning_effort
+    maxTokensField: "max_tokens",      // instead of max_completion_tokens
+    thinkingFormat: "qwen"             // uses enable_thinking: true
+  }
+}]
+```
+
+</Steps>
+
+<Warning>
+When `models` is provided, it **replaces** all existing models for that provider.
+</Warning>
+
+## OAuth Support
+
+Add authentication that integrates with `/login`:
+
+<Steps>
+
+### Implement Login Flow
+
+```typescript
+import type {
+  OAuthCredentials,
+  OAuthLoginCallbacks
+} from "@mariozechner/pi-ai";
+
+pi.registerProvider("corporate-ai", {
+  baseUrl: "https://ai.corp.com/v1",
+  api: "openai-responses",
+  models: [/* ... */],
+  oauth: {
+    name: "Corporate AI (SSO)",
+
+    async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+      // Open browser for OAuth
+      callbacks.onAuth({ url: "https://sso.corp.com/authorize?..." });
+
+      // Or show device code
+      callbacks.onDeviceCode({
+        userCode: "ABCD-1234",
+        verificationUri: "https://sso.corp.com/device"
+      });
+
+      // Or prompt for token
+      const code = await callbacks.onPrompt({ message: "Enter SSO code:" });
+
+      // Exchange for tokens
+      const tokens = await exchangeCodeForTokens(code);
+
+      return {
+        refresh: tokens.refreshToken,
+        access: tokens.accessToken,
+        expires: Date.now() + tokens.expiresIn * 1000
+      };
+    },
+
+    async refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
+      const tokens = await refreshAccessToken(credentials.refresh);
+      return {
+        refresh: tokens.refreshToken ?? credentials.refresh,
+        access: tokens.accessToken,
+        expires: Date.now() + tokens.expiresIn * 1000
+      };
+    },
+
+    getApiKey(credentials: OAuthCredentials): string {
+      return credentials.access;
+    }
+  }
+});
+```
+
+### Test Login
+
+After registration:
+
+```bash
+pi /login corporate-ai
+```
+
+Credentials are stored in `~/.pi/agent/auth.json` and auto-refresh.
+
+</Steps>
+
+## Custom Streaming API
+
+For providers with non-standard APIs, implement `streamSimple`:
+
+```typescript
+import {
+  type AssistantMessage,
+  type AssistantMessageEventStream,
+  type Context,
+  type Model,
+  type SimpleStreamOptions,
+  calculateCost,
+  createAssistantMessageEventStream,
+} from "@mariozechner/pi-ai";
+
+function streamMyProvider(
+  model: Model<any>,
+  context: Context,
+  options?: SimpleStreamOptions
+): AssistantMessageEventStream {
+  const stream = createAssistantMessageEventStream();
+
+  (async () => {
+    const output: AssistantMessage = {
+      role: "assistant",
+      content: [],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "stop",
+      timestamp: Date.now(),
+    };
+
+    try {
+      stream.push({ type: "start", partial: output });
+
+      // Make API request and process response...
+      // Push content events as they arrive...
+
+      stream.push({
+        type: "done",
+        reason: output.stopReason as "stop" | "length" | "toolUse",
+        message: output
+      });
+      stream.end();
+    } catch (error) {
+      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.errorMessage = error instanceof Error ? error.message : String(error);
+      stream.push({ type: "error", reason: output.stopReason, error: output });
+      stream.end();
+    }
+  })();
+
+  return stream;
+}
+
+pi.registerProvider("my-provider", {
+  baseUrl: "https://api.example.com",
+  apiKey: "MY_API_KEY",
+  api: "my-custom-api",
+  models: [/* ... */],
+  streamSimple: streamMyProvider
+});
+```
+
+<Note>
+Study the existing provider implementations in `packages/ai/src/providers/` before writing your own.
+</Note>
+
+## Complete Example
+
+Here's a complete custom provider with OAuth:
+
+```typescript custom-provider-anthropic/index.ts
+import Anthropic from "@anthropic-ai/sdk";
+import type {
+  Api,
+  AssistantMessageEventStream,
+  Context,
+  Model,
+  OAuthCredentials,
+  OAuthLoginCallbacks,
+  SimpleStreamOptions,
+} from "@mariozechner/pi-ai";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+// OAuth implementation
+async function loginAnthropic(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+  const authUrl = "https://claude.ai/oauth/authorize?...";
+  callbacks.onAuth({ url: authUrl });
+  
+  const authCode = await callbacks.onPrompt({ message: "Paste the authorization code:" });
+  const tokens = await exchangeCodeForTokens(authCode);
+  
+  return {
+    refresh: tokens.refreshToken,
+    access: tokens.accessToken,
+    expires: Date.now() + tokens.expiresIn * 1000 - 5 * 60 * 1000,
+  };
+}
+
+async function refreshAnthropicToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
+  const tokens = await refreshTokens(credentials.refresh);
+  return {
+    refresh: tokens.refreshToken,
+    access: tokens.accessToken,
+    expires: Date.now() + tokens.expiresIn * 1000 - 5 * 60 * 1000,
+  };
+}
+
+function streamCustomAnthropic(
+  model: Model<Api>,
+  context: Context,
+  options?: SimpleStreamOptions
+): AssistantMessageEventStream {
+  // Custom streaming implementation
+  // See packages/ai/src/providers/anthropic.ts for reference
+}
+
+export default function (pi: ExtensionAPI) {
+  pi.registerProvider("custom-anthropic", {
+    baseUrl: "https://api.anthropic.com",
+    apiKey: "CUSTOM_ANTHROPIC_API_KEY",
+    api: "custom-anthropic-api",
+
+    models: [
+      {
+        id: "claude-opus-4-5",
+        name: "Claude Opus 4.5 (Custom)",
+        reasoning: true,
+        input: ["text", "image"],
+        cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+        contextWindow: 200000,
+        maxTokens: 64000,
+      },
+      {
+        id: "claude-sonnet-4-5",
+        name: "Claude Sonnet 4.5 (Custom)",
+        reasoning: true,
+        input: ["text", "image"],
+        cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+        contextWindow: 200000,
+        maxTokens: 64000,
+      },
+    ],
+
+    oauth: {
+      name: "Custom Anthropic (Claude Pro/Max)",
+      login: loginAnthropic,
+      refreshToken: refreshAnthropicToken,
+      getApiKey: (cred) => cred.access,
+    },
+
+    streamSimple: streamCustomAnthropic,
+  });
+}
+```
+
+See `packages/coding-agent/examples/extensions/custom-provider-anthropic/` for the complete working example.
+
+## Unregister Provider
+
+Remove a provider:
+
+```typescript
+pi.unregisterProvider("my-provider");
+```
+
+Built-in models that were overridden are restored.
+
+## Reference
+
+### Config Options
+
+```typescript
+interface ProviderConfig {
+  baseUrl?: string;           // API endpoint URL
+  apiKey?: string;            // API key or env var name
+  api?: Api;                  // API type for streaming
+  streamSimple?: Function;    // Custom streaming implementation
+  headers?: Record<string, string>;  // Custom headers
+  authHeader?: boolean;       // Add Authorization: Bearer header
+  models?: ProviderModelConfig[];    // Model definitions
+  oauth?: OAuthProvider;      // OAuth configuration
+}
+```
+
+### Model Definition
+
+```typescript
+interface ProviderModelConfig {
+  id: string;                 // Model ID
+  name: string;               // Display name
+  api?: Api;                  // API override for this model
+  reasoning: boolean;         // Supports extended thinking
+  input: ("text" | "image")[];  // Supported inputs
+  cost: {                     // Cost per million tokens
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+  };
+  contextWindow: number;      // Max context size
+  maxTokens: number;          // Max output tokens
+  headers?: Record<string, string>;  // Model-specific headers
+  compat?: OpenAICompletionsCompat;  // Compatibility settings
+}
+```
+
+## Next Steps
+
+- See [Building Extensions](/guides/building-extensions) for extension basics
+- See [Creating Skills](/guides/creating-skills) for specialized workflows
+- Check `packages/coding-agent/examples/extensions/custom-provider-*` for examples

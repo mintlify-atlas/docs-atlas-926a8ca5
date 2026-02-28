@@ -1,0 +1,341 @@
+---
+title: Built-in Tools
+description: File system and shell tools provided by Pi
+---
+
+Pi provides a set of built-in tools for file system operations and shell command execution. These tools are available to the agent by default.
+
+## Import
+
+```typescript
+import {
+  readTool,
+  writeTool,
+  editTool,
+  bashTool,
+  grepTool,
+  findTool,
+  lsTool,
+  codingTools,
+} from "@mariozechner/pi-coding-agent";
+```
+
+## Tool Factories
+
+All tools are created using factory functions that accept a working directory and optional configuration.
+
+### createReadTool
+
+Create a tool for reading file contents.
+
+```typescript
+createReadTool(cwd: string, options?: ReadToolOptions): AgentTool
+```
+
+<ParamField path="cwd" type="string" required>
+  Working directory for file operations
+</ParamField>
+
+<ParamField path="options" type="ReadToolOptions">
+  <Expandable title="properties">
+    <ParamField path="autoResizeImages" type="boolean">
+      Auto-resize images to 2000x2000 max. Default: `true`
+    </ParamField>
+    
+    <ParamField path="operations" type="ReadOperations">
+      Custom file operations (for SSH, etc.)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Input Schema:**
+```typescript
+{
+  path: string;        // File path (relative or absolute)
+  offset?: number;     // Starting line (1-indexed)
+  limit?: number;      // Max lines to read
+}
+```
+
+**Features:**
+- Reads text files and images (jpg, png, gif, webp)
+- Auto-truncates to 2000 lines or 50KB
+- Supports offset/limit for large files
+- Images sent as base64 attachments
+
+### createWriteTool
+
+Create a tool for writing file contents.
+
+```typescript
+createWriteTool(cwd: string, options?: WriteToolOptions): AgentTool
+```
+
+<ParamField path="cwd" type="string" required>
+  Working directory for file operations
+</ParamField>
+
+<ParamField path="options" type="WriteToolOptions">
+  <Expandable title="properties">
+    <ParamField path="operations" type="WriteOperations">
+      Custom file operations (for SSH, etc.)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Input Schema:**
+```typescript
+{
+  path: string;     // File path (relative or absolute)
+  content: string;  // File content to write
+}
+```
+
+**Features:**
+- Creates parent directories automatically
+- Overwrites existing files
+- Returns confirmation message
+
+### createEditTool
+
+Create a tool for editing files using exact string replacement.
+
+```typescript
+createEditTool(cwd: string, options?: EditToolOptions): AgentTool
+```
+
+<ParamField path="cwd" type="string" required>
+  Working directory for file operations
+</ParamField>
+
+<ParamField path="options" type="EditToolOptions">
+  <Expandable title="properties">
+    <ParamField path="operations" type="EditOperations">
+      Custom file operations (for SSH, etc.)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Input Schema:**
+```typescript
+{
+  path: string;          // File path
+  oldString: string;     // String to replace
+  newString: string;     // Replacement string
+  replaceAll?: boolean;  // Replace all occurrences (default: false)
+}
+```
+
+**Features:**
+- Exact string matching (no regex)
+- Fails if `oldString` not found
+- Fails if multiple matches without `replaceAll`
+- Shows unified diff of changes
+
+### createBashTool
+
+Create a tool for executing bash commands.
+
+```typescript
+createBashTool(cwd: string, options?: BashToolOptions): AgentTool
+```
+
+<ParamField path="cwd" type="string" required>
+  Working directory for command execution
+</ParamField>
+
+<ParamField path="options" type="BashToolOptions">
+  <Expandable title="properties">
+    <ParamField path="operations" type="BashOperations">
+      Custom bash operations (for SSH, etc.)
+    </ParamField>
+    
+    <ParamField path="spawnHook" type="BashSpawnHook">
+      Hook called before spawning each process
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Input Schema:**
+```typescript
+{
+  command: string;      // Bash command to execute
+  description?: string; // Optional description
+}
+```
+
+**Features:**
+- Executes in persistent shell session
+- Streams output in real-time
+- Preserves environment variables
+- Auto-truncates output to 2000 lines or 50KB
+
+### createGrepTool
+
+Create a tool for searching file contents using regex.
+
+```typescript
+createGrepTool(cwd: string, options?: GrepToolOptions): AgentTool
+```
+
+<ParamField path="cwd" type="string" required>
+  Working directory for search operations
+</ParamField>
+
+**Input Schema:**
+```typescript
+{
+  pattern: string;   // Regex pattern
+  include?: string;  // File glob pattern (e.g., "*.ts")
+  path?: string;     // Search directory
+}
+```
+
+**Features:**
+- Full regex support
+- File filtering by glob pattern
+- Returns file paths and line numbers
+- Fast implementation using ripgrep
+
+### createFindTool
+
+Create a tool for finding files by name pattern.
+
+```typescript
+createFindTool(cwd: string, options?: FindToolOptions): AgentTool
+```
+
+<ParamField path="cwd" type="string" required>
+  Working directory for search operations
+</ParamField>
+
+**Input Schema:**
+```typescript
+{
+  pattern: string;  // Glob pattern (e.g., "**/*.ts")
+  path?: string;    // Search directory
+}
+```
+
+**Features:**
+- Glob pattern matching
+- Sorted by modification time
+- Works with any codebase size
+
+### createLsTool
+
+Create a tool for listing directory contents.
+
+```typescript
+createLsTool(cwd: string, options?: LsToolOptions): AgentTool
+```
+
+<ParamField path="cwd" type="string" required>
+  Working directory for file operations
+</ParamField>
+
+**Input Schema:**
+```typescript
+{
+  path: string;       // Directory path
+  recursive?: boolean; // List recursively (default: false)
+}
+```
+
+**Features:**
+- Shows file sizes and types
+- Supports recursive listing
+- Sorted output
+
+## Pre-built Tool Sets
+
+### codingTools
+
+All tools for full file system access.
+
+```typescript
+import { codingTools } from "@mariozechner/pi-coding-agent";
+
+const tools = codingTools; // Uses process.cwd()
+```
+
+Includes: `read`, `write`, `edit`, `bash`, `grep`, `find`, `ls`
+
+### createCodingTools
+
+Factory for creating coding tools with custom working directory.
+
+```typescript
+import { createCodingTools } from "@mariozechner/pi-coding-agent";
+
+const tools = createCodingTools("/path/to/project");
+```
+
+### readOnlyTools
+
+Read-only tools (no write, edit, or bash).
+
+```typescript
+import { readOnlyTools } from "@mariozechner/pi-coding-agent";
+
+const tools = readOnlyTools; // Uses process.cwd()
+```
+
+Includes: `read`, `grep`, `find`, `ls`
+
+### createReadOnlyTools
+
+Factory for creating read-only tools with custom working directory.
+
+```typescript
+import { createReadOnlyTools } from "@mariozechner/pi-coding-agent";
+
+const tools = createReadOnlyTools("/path/to/project");
+```
+
+## Example: Custom Tool Set
+
+```typescript
+import {
+  createReadTool,
+  createWriteTool,
+  createBashTool,
+} from "@mariozechner/pi-coding-agent";
+
+const cwd = "/path/to/project";
+
+const tools = [
+  createReadTool(cwd),
+  createWriteTool(cwd),
+  createBashTool(cwd, {
+    spawnHook: (context) => {
+      console.log(`Executing: ${context.command}`);
+    },
+  }),
+];
+```
+
+## Custom Operations
+
+All tool factories support custom operations for remote file systems:
+
+```typescript
+import { createReadTool, type ReadOperations } from "@mariozechner/pi-coding-agent";
+
+const sshOperations: ReadOperations = {
+  readFile: async (path) => {
+    // SSH implementation
+    return Buffer.from(await sshClient.readFile(path));
+  },
+  access: async (path) => {
+    // Check if file exists via SSH
+    if (!await sshClient.exists(path)) {
+      throw new Error("File not found");
+    }
+  },
+};
+
+const readTool = createReadTool("/remote/path", {
+  operations: sshOperations,
+});
+```

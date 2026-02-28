@@ -1,0 +1,557 @@
+---
+title: 'Tool Calling'
+description: 'Define and use tools (function calling) with TypeBox schemas and automatic validation'
+---
+
+# Tool Calling
+
+Tools (also called function calling) enable LLMs to interact with external systems. The library uses TypeBox schemas for type-safe tool definitions with automatic validation.
+
+<Note>
+This library only includes models that support tool calling, as it's essential for agentic workflows.
+</Note>
+
+## Defining Tools
+
+Tools are defined with TypeBox schemas:
+
+```typescript
+import { Type, Tool, StringEnum } from '@mariozechner/pi-ai';
+
+// Simple tool
+const timeTool: Tool = {
+  name: 'get_time',
+  description: 'Get the current time',
+  parameters: Type.Object({
+    timezone: Type.Optional(Type.String({ 
+      description: 'Optional timezone (e.g., America/New_York)' 
+    }))
+  })
+};
+
+// Tool with validation
+const weatherTool: Tool = {
+  name: 'get_weather',
+  description: 'Get current weather for a location',
+  parameters: Type.Object({
+    location: Type.String({ description: 'City name or coordinates' }),
+    units: StringEnum(['celsius', 'fahrenheit'], { default: 'celsius' })
+  })
+};
+
+// Complex tool
+const bookMeetingTool: Tool = {
+  name: 'book_meeting',
+  description: 'Schedule a meeting',
+  parameters: Type.Object({
+    title: Type.String({ minLength: 1 }),
+    startTime: Type.String({ format: 'date-time' }),
+    endTime: Type.String({ format: 'date-time' }),
+    attendees: Type.Array(Type.String({ format: 'email' }), { minItems: 1 })
+  })
+};
+```
+
+<Warning>
+For Google API compatibility, use `StringEnum` helper instead of `Type.Enum`. `Type.Enum` generates `anyOf`/`const` patterns that Google doesn't support.
+</Warning>
+
+### TypeBox Schemas
+
+TypeBox provides rich schema types:
+
+```typescript
+import { Type } from '@mariozechner/pi-ai';
+
+// Basic types
+Type.String({ description: 'A string value' })
+Type.Number({ minimum: 0, maximum: 100 })
+Type.Boolean()
+Type.Integer({ minimum: 1 })
+
+// Optional and nullable
+Type.Optional(Type.String())
+Type.Union([Type.String(), Type.Null()])
+
+// Arrays and objects
+Type.Array(Type.String(), { minItems: 1, maxItems: 10 })
+Type.Object({
+  name: Type.String(),
+  age: Type.Integer({ minimum: 0 })
+})
+
+// Enums (use StringEnum for Google compatibility)
+StringEnum(['option1', 'option2'], { default: 'option1' })
+
+// Advanced
+Type.String({ pattern: '^[a-z]+$' })
+Type.String({ format: 'email' })
+Type.String({ format: 'date-time' })
+Type.String({ format: 'uri' })
+```
+
+## Basic Tool Usage
+
+```typescript
+import { getModel, complete, Type, Tool, Context } from '@mariozechner/pi-ai';
+
+const tools: Tool[] = [{
+  name: 'get_weather',
+  description: 'Get current weather',
+  parameters: Type.Object({
+    location: Type.String({ description: 'City name' })
+  })
+}];
+
+const context: Context = {
+  messages: [{ role: 'user', content: 'What is the weather in London?' }],
+  tools
+};
+
+const model = getModel('openai', 'gpt-4o-mini');
+const response = await complete(model, context);
+
+// Check for tool calls
+for (const block of response.content) {
+  if (block.type === 'toolCall') {
+    console.log(`Tool: ${block.name}`);
+    console.log(`Arguments: ${JSON.stringify(block.arguments)}`);
+    
+    // Execute tool
+    const result = await executeWeatherApi(block.arguments);
+    
+    // Add tool result
+    context.messages.push(response);
+    context.messages.push({
+      role: 'toolResult',
+      toolCallId: block.id,
+      toolName: block.name,
+      content: [{ type: 'text', text: JSON.stringify(result) }],
+      isError: false,
+      timestamp: Date.now()
+    });
+  }
+}
+
+// Continue conversation if tools were called
+if (response.stopReason === 'toolUse') {
+  const continuation = await complete(model, context);
+  console.log(continuation.content);
+}
+```
+
+## Tool Results with Images
+
+Tool results support both text and images:
+
+```typescript
+import { readFileSync } from 'fs';
+
+const imageBuffer = readFileSync('chart.png');
+
+context.messages.push({
+  role: 'toolResult',
+  toolCallId: 'tool_xyz',
+  toolName: 'generate_chart',
+  content: [
+    { type: 'text', text: 'Generated chart showing temperature trends' },
+    { 
+      type: 'image', 
+      data: imageBuffer.toString('base64'), 
+      mimeType: 'image/png' 
+    }
+  ],
+  isError: false,
+  timestamp: Date.now()
+});
+```
+
+## Validating Tool Arguments
+
+Use `validateToolCall` to validate arguments against schemas:
+
+```typescript
+import { stream, validateToolCall, Tool } from '@mariozechner/pi-ai';
+
+const tools: Tool[] = [weatherTool, calculatorTool];
+const s = stream(model, { messages, tools });
+
+for await (const event of s) {
+  if (event.type === 'toolcall_end') {
+    const toolCall = event.toolCall;
+    
+    try {
+      // Validate arguments (throws on invalid args)
+      const validatedArgs = validateToolCall(tools, toolCall);
+      const result = await executeMyTool(toolCall.name, validatedArgs);
+      
+      context.messages.push({
+        role: 'toolResult',
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        content: [{ type: 'text', text: JSON.stringify(result) }],
+        isError: false,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      // Validation failed - return error so model can retry
+      context.messages.push({
+        role: 'toolResult',
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        content: [{ type: 'text', text: error.message }],
+        isError: true,
+        timestamp: Date.now()
+      });
+    }
+  }
+}
+```
+
+## Streaming Tool Calls
+
+Tool arguments are streamed and progressively parsed:
+
+```typescript
+import { stream, Type, Tool } from '@mariozechner/pi-ai';
+
+const tools: Tool[] = [{
+  name: 'write_file',
+  description: 'Write content to a file',
+  parameters: Type.Object({
+    path: Type.String({ description: 'File path' }),
+    content: Type.String({ description: 'File content' })
+  })
+}];
+
+const s = stream(model, { messages, tools });
+
+for await (const event of s) {
+  if (event.type === 'toolcall_start') {
+    console.log(`[Tool call started: index ${event.contentIndex}]`);
+  }
+  
+  if (event.type === 'toolcall_delta') {
+    const toolCall = event.partial.content[event.contentIndex];
+    
+    // BE DEFENSIVE: arguments may be incomplete during streaming
+    if (toolCall.type === 'toolCall' && toolCall.arguments) {
+      if (toolCall.name === 'write_file') {
+        // Show file path as soon as it's available
+        if (toolCall.arguments.path) {
+          console.log(`Writing to: ${toolCall.arguments.path}`);
+        }
+        
+        // Content might be partial or missing
+        if (toolCall.arguments.content) {
+          console.log(`Content preview: ${toolCall.arguments.content.substring(0, 100)}...`);
+        }
+      }
+    }
+  }
+  
+  if (event.type === 'toolcall_end') {
+    // Arguments are now complete (but not yet validated)
+    const toolCall = event.toolCall;
+    console.log(`Tool completed: ${toolCall.name}`);
+    console.log(`Full arguments:`, toolCall.arguments);
+  }
+}
+```
+
+**Important notes about partial arguments:**
+- During `toolcall_delta`, `arguments` contains best-effort parse of partial JSON
+- Fields may be missing, incomplete, or truncated mid-word
+- String values may be cut off mid-sentence
+- Arrays and objects may be partially populated
+- At minimum, `arguments` will be `{}`, never `undefined`
+- Google provider does not support streaming tool calls - you get one `toolcall_delta` with full arguments
+
+## Multiple Tool Calls
+
+Models can call multiple tools in one response:
+
+```typescript
+const response = await complete(model, context);
+
+// Process all tool calls
+for (const block of response.content) {
+  if (block.type === 'toolCall') {
+    let result;
+    
+    switch (block.name) {
+      case 'get_weather':
+        result = await getWeather(block.arguments.location);
+        break;
+      case 'get_time':
+        result = await getTime(block.arguments.timezone);
+        break;
+      default:
+        result = { error: `Unknown tool: ${block.name}` };
+    }
+    
+    context.messages.push({
+      role: 'toolResult',
+      toolCallId: block.id,
+      toolName: block.name,
+      content: [{ type: 'text', text: JSON.stringify(result) }],
+      isError: false,
+      timestamp: Date.now()
+    });
+  }
+}
+
+// Add assistant message to context
+context.messages.push(response);
+
+// Continue to get final response
+if (response.stopReason === 'toolUse') {
+  const finalResponse = await complete(model, context);
+}
+```
+
+## Tool Choice
+
+Control when tools are called:
+
+<CodeGroup>
+```typescript Auto (Default)
+// Model decides when to use tools
+const response = await complete(model, context, {
+  toolChoice: 'auto'
+});
+```
+
+```typescript Required
+// Force model to use a tool
+const response = await complete(model, context, {
+  toolChoice: 'required'
+});
+```
+
+```typescript None
+// Disable tool usage
+const response = await complete(model, context, {
+  toolChoice: 'none'
+});
+```
+
+```typescript Specific Tool
+// Force specific tool
+const response = await complete(model, context, {
+  toolChoice: {
+    type: 'function',
+    function: { name: 'get_weather' }
+  }
+});
+```
+</CodeGroup>
+
+## Error Handling
+
+Handle tool execution errors:
+
+```typescript
+for (const block of response.content) {
+  if (block.type === 'toolCall') {
+    try {
+      // Validate arguments
+      const validatedArgs = validateToolCall(tools, block);
+      
+      // Execute tool
+      const result = await executeTool(block.name, validatedArgs);
+      
+      context.messages.push({
+        role: 'toolResult',
+        toolCallId: block.id,
+        toolName: block.name,
+        content: [{ type: 'text', text: JSON.stringify(result) }],
+        isError: false,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      // Return error to model
+      context.messages.push({
+        role: 'toolResult',
+        toolCallId: block.id,
+        toolName: block.name,
+        content: [{ 
+          type: 'text', 
+          text: `Error: ${error.message}` 
+        }],
+        isError: true,
+        timestamp: Date.now()
+      });
+    }
+  }
+}
+
+context.messages.push(response);
+
+// Model will see the error and can retry or handle it
+const continuation = await complete(model, context);
+```
+
+## Real-World Example
+
+Complete tool calling workflow:
+
+```typescript
+import { getModel, complete, validateToolCall, Type, Tool, Context } from '@mariozechner/pi-ai';
+import { readFileSync, writeFileSync } from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+// Define tools
+const tools: Tool[] = [
+  {
+    name: 'read_file',
+    description: 'Read contents of a file',
+    parameters: Type.Object({
+      path: Type.String({ description: 'File path' })
+    })
+  },
+  {
+    name: 'write_file',
+    description: 'Write content to a file',
+    parameters: Type.Object({
+      path: Type.String({ description: 'File path' }),
+      content: Type.String({ description: 'File content' })
+    })
+  },
+  {
+    name: 'run_command',
+    description: 'Run a shell command',
+    parameters: Type.Object({
+      command: Type.String({ description: 'Shell command to run' })
+    })
+  }
+];
+
+// Tool execution functions
+const toolFunctions = {
+  read_file: async (args: { path: string }) => {
+    const content = readFileSync(args.path, 'utf-8');
+    return { content };
+  },
+  write_file: async (args: { path: string; content: string }) => {
+    writeFileSync(args.path, args.content);
+    return { success: true };
+  },
+  run_command: async (args: { command: string }) => {
+    const { stdout, stderr } = await execAsync(args.command);
+    return { stdout, stderr };
+  }
+};
+
+// Main loop
+const model = getModel('openai', 'gpt-4o-mini');
+const context: Context = {
+  systemPrompt: 'You are a helpful coding assistant.',
+  messages: [
+    { role: 'user', content: 'Create a Python script that prints "Hello, World!"' }
+  ],
+  tools
+};
+
+let maxIterations = 10;
+
+while (maxIterations-- > 0) {
+  const response = await complete(model, context);
+  context.messages.push(response);
+  
+  // Check if we're done
+  if (response.stopReason === 'stop') {
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        console.log(block.text);
+      }
+    }
+    break;
+  }
+  
+  // Execute tool calls
+  if (response.stopReason === 'toolUse') {
+    for (const block of response.content) {
+      if (block.type === 'toolCall') {
+        try {
+          // Validate arguments
+          const validatedArgs = validateToolCall(tools, block);
+          
+          // Execute tool
+          const toolFn = toolFunctions[block.name as keyof typeof toolFunctions];
+          if (!toolFn) {
+            throw new Error(`Unknown tool: ${block.name}`);
+          }
+          
+          console.log(`Executing: ${block.name}(${JSON.stringify(validatedArgs)})`);
+          const result = await toolFn(validatedArgs as any);
+          
+          context.messages.push({
+            role: 'toolResult',
+            toolCallId: block.id,
+            toolName: block.name,
+            content: [{ type: 'text', text: JSON.stringify(result) }],
+            isError: false,
+            timestamp: Date.now()
+          });
+        } catch (error: any) {
+          context.messages.push({
+            role: 'toolResult',
+            toolCallId: block.id,
+            toolName: block.name,
+            content: [{ type: 'text', text: `Error: ${error.message}` }],
+            isError: true,
+            timestamp: Date.now()
+          });
+        }
+      }
+    }
+    continue;
+  }
+  
+  // Handle errors
+  if (response.stopReason === 'error' || response.stopReason === 'aborted') {
+    console.error('Error:', response.errorMessage);
+    break;
+  }
+}
+
+if (maxIterations === -1) {
+  console.error('Max iterations reached');
+}
+```
+
+## Provider-Specific Notes
+
+### Google
+- Does not support streaming tool arguments
+- Receives single `toolcall_delta` event with complete arguments
+- Use `StringEnum` instead of `Type.Enum` for enums
+
+### Mistral
+- Requires tool call IDs to be exactly 9 alphanumeric characters
+- Library handles this automatically via normalization
+
+### OpenRouter
+- Tool support depends on underlying model
+- Some models may not support all tool features
+
+### Custom Models
+- Check `model.api` to determine tool format
+- OpenAI-compatible APIs use OpenAI tool format
+- Anthropic API uses Anthropic tool format
+- Google APIs use Google function calling format
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="wave-pulse" href="/ai/streaming">
+    Learn about streaming tool calls
+  </Card>
+  <Card title="Thinking" icon="brain" href="/ai/thinking">
+    Combine tools with reasoning
+  </Card>
+</CardGroup>

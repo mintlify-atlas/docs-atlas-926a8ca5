@@ -1,0 +1,277 @@
+---
+title: Model Functions
+description: Model registry functions for discovering and accessing LLM models
+---
+
+The `@mariozechner/pi-ai` package provides functions for accessing model metadata and discovering available models.
+
+## Import
+
+```typescript
+import { getModel, getModels, getProviders } from "@mariozechner/pi-ai";
+```
+
+## getModel
+
+Get a specific model by provider and model ID.
+
+```typescript
+getModel<TProvider extends KnownProvider, TModelId extends keyof Models[TProvider]>(
+  provider: TProvider,
+  modelId: TModelId
+): Model<ModelApi<TProvider, TModelId>>
+```
+
+<ParamField path="provider" type="KnownProvider" required>
+  Provider name (e.g., `"anthropic"`, `"openai"`, `"google"`)
+</ParamField>
+
+<ParamField path="modelId" type="string" required>
+  Model ID (e.g., `"claude-4.5-sonnet-20250514"`, `"gpt-5.3-codex"`)
+</ParamField>
+
+<ResponseField name="Model" type="object">
+  <Expandable title="properties">
+    <ResponseField name="id" type="string">
+      Model identifier
+    </ResponseField>
+    
+    <ResponseField name="provider" type="string">
+      Provider name
+    </ResponseField>
+    
+    <ResponseField name="api" type="Api">
+      API type (e.g., `"anthropic-messages"`, `"openai-responses"`)
+    </ResponseField>
+    
+    <ResponseField name="displayName" type="string">
+      Human-readable name
+    </ResponseField>
+    
+    <ResponseField name="contextWindow" type="number">
+      Maximum context window size in tokens
+    </ResponseField>
+    
+    <ResponseField name="maxOutput" type="number">
+      Maximum output tokens
+    </ResponseField>
+    
+    <ResponseField name="cost" type="object">
+      <Expandable title="properties">
+        <ResponseField name="input" type="number">Input cost per 1M tokens (USD)</ResponseField>
+        <ResponseField name="output" type="number">Output cost per 1M tokens (USD)</ResponseField>
+        <ResponseField name="cacheRead" type="number">Cache read cost per 1M tokens (USD)</ResponseField>
+        <ResponseField name="cacheWrite" type="number">Cache write cost per 1M tokens (USD)</ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="capabilities" type="string[]">
+      Capabilities (e.g., `["tools", "vision", "thinking"]`)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```typescript
+import { getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("anthropic", "claude-4.5-sonnet-20250514");
+
+console.log(model.displayName);      // "Claude 4.5 Sonnet"
+console.log(model.contextWindow);    // 200000
+console.log(model.maxOutput);        // 64000
+console.log(model.cost.input);       // 3.00 (per 1M tokens)
+console.log(model.capabilities);     // ["tools", "vision", "thinking"]
+```
+
+## getModels
+
+Get all models for a specific provider.
+
+```typescript
+getModels<TProvider extends KnownProvider>(
+  provider: TProvider
+): Model[]
+```
+
+<ParamField path="provider" type="KnownProvider" required>
+  Provider name
+</ParamField>
+
+Returns an array of all models from the specified provider.
+
+### Example
+
+```typescript
+import { getModels } from "@mariozechner/pi-ai";
+
+const anthropicModels = getModels("anthropic");
+
+console.log(`Anthropic has ${anthropicModels.length} models:`);
+for (const model of anthropicModels) {
+  console.log(`- ${model.displayName} (${model.id})`);
+}
+```
+
+## getProviders
+
+Get all available providers.
+
+```typescript
+getProviders(): KnownProvider[]
+```
+
+Returns an array of all registered provider names.
+
+### Example
+
+```typescript
+import { getProviders, getModels } from "@mariozechner/pi-ai";
+
+const providers = getProviders();
+
+console.log("Available providers:");
+for (const provider of providers) {
+  const models = getModels(provider);
+  console.log(`- ${provider}: ${models.length} models`);
+}
+```
+
+## calculateCost
+
+Calculate the cost for a given usage.
+
+```typescript
+calculateCost<TApi extends Api>(
+  model: Model<TApi>,
+  usage: Usage
+): Usage['cost']
+```
+
+<ParamField path="model" type="Model" required>
+  The model used
+</ParamField>
+
+<ParamField path="usage" type="Usage" required>
+  Token usage object
+</ParamField>
+
+Returns the cost breakdown with `input`, `output`, `cacheRead`, `cacheWrite`, and `total` in USD.
+
+### Example
+
+```typescript
+import { getModel, calculateCost } from "@mariozechner/pi-ai";
+
+const model = getModel("anthropic", "claude-4.5-sonnet-20250514");
+
+const usage = {
+  input: 1000,
+  output: 500,
+  cacheRead: 5000,
+  cacheWrite: 1000,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+};
+
+const cost = calculateCost(model, usage);
+
+console.log(`Input cost: $${cost.input.toFixed(4)}`);
+console.log(`Output cost: $${cost.output.toFixed(4)}`);
+console.log(`Cache read: $${cost.cacheRead.toFixed(4)}`);
+console.log(`Total: $${cost.total.toFixed(4)}`);
+```
+
+## supportsXhigh
+
+Check if a model supports `"xhigh"` thinking level.
+
+```typescript
+supportsXhigh<TApi extends Api>(model: Model<TApi>): boolean
+```
+
+<ParamField path="model" type="Model" required>
+  The model to check
+</ParamField>
+
+Returns `true` if the model supports `"xhigh"` thinking (GPT-5.2/5.3 and Opus 4.6).
+
+### Example
+
+```typescript
+import { getModel, supportsXhigh } from "@mariozechner/pi-ai";
+
+const model1 = getModel("openai", "gpt-5.3-codex");
+const model2 = getModel("anthropic", "claude-4.5-sonnet-20250514");
+
+console.log(supportsXhigh(model1)); // true
+console.log(supportsXhigh(model2)); // false
+```
+
+## modelsAreEqual
+
+Check if two models are the same.
+
+```typescript
+modelsAreEqual<TApi extends Api>(
+  a: Model<TApi> | null | undefined,
+  b: Model<TApi> | null | undefined
+): boolean
+```
+
+Compares both `id` and `provider` fields. Returns `false` if either model is null/undefined.
+
+### Example
+
+```typescript
+import { getModel, modelsAreEqual } from "@mariozechner/pi-ai";
+
+const model1 = getModel("anthropic", "claude-4.5-sonnet-20250514");
+const model2 = getModel("anthropic", "claude-4.5-sonnet-20250514");
+const model3 = getModel("openai", "gpt-5.3-codex");
+
+console.log(modelsAreEqual(model1, model2)); // true
+console.log(modelsAreEqual(model1, model3)); // false
+```
+
+## Known Providers
+
+The following providers are built into Pi:
+
+- `"anthropic"` - Anthropic Claude models
+- `"openai"` - OpenAI GPT models
+- `"google"` - Google Gemini models
+- `"google-vertex"` - Google Vertex AI
+- `"google-gemini-cli"` - Google Gemini CLI
+- `"amazon-bedrock"` - AWS Bedrock
+- `"xai"` - xAI Grok models
+- `"groq"` - Groq
+- `"cerebras"` - Cerebras
+- `"openrouter"` - OpenRouter
+- `"github-copilot"` - GitHub Copilot
+- `"mistral"` - Mistral AI
+- `"minimax"` - MiniMax
+- `"huggingface"` - Hugging Face
+
+## Model Capabilities
+
+Models may have the following capabilities:
+
+- `"tools"` - Supports function calling
+- `"vision"` - Supports image inputs
+- `"thinking"` - Supports extended reasoning
+- `"streaming"` - Supports streaming responses
+
+```typescript
+import { getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("anthropic", "claude-4.5-sonnet-20250514");
+
+if (model.capabilities.includes("vision")) {
+  console.log("This model can analyze images");
+}
+
+if (model.capabilities.includes("thinking")) {
+  console.log("This model supports extended reasoning");
+}
+```

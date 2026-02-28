@@ -1,0 +1,244 @@
+---
+title: Complete Functions
+description: Synchronous completion helpers for LLM responses
+---
+
+The `complete()` and `completeSimple()` functions provide a synchronous interface for getting LLM responses. They internally use `stream()` and `streamSimple()` but await the full result.
+
+## Import
+
+```typescript
+import { complete, completeSimple } from "@mariozechner/pi-ai";
+```
+
+## complete
+
+Get a complete response with provider-specific options.
+
+```typescript
+complete<TApi extends Api>(
+  model: Model<TApi>,
+  context: Context,
+  options?: ProviderStreamOptions
+): Promise<AssistantMessage>
+```
+
+<ParamField path="model" type="Model<TApi>" required>
+  The model to use for generation
+</ParamField>
+
+<ParamField path="context" type="Context" required>
+  Conversation context
+</ParamField>
+
+<ParamField path="options" type="ProviderStreamOptions">
+  Same options as `stream()` (see [Stream Functions](/api/ai/stream))
+</ParamField>
+
+<ResponseField name="AssistantMessage" type="object">
+  <Expandable title="properties">
+    <ResponseField name="role" type="'assistant'">
+      Message role
+    </ResponseField>
+    
+    <ResponseField name="content" type="Content[]">
+      Message content (text, thinking, tool calls)
+    </ResponseField>
+    
+    <ResponseField name="usage" type="Usage">
+      Token usage statistics
+    </ResponseField>
+    
+    <ResponseField name="timestamp" type="number">
+      Message timestamp (ms since epoch)
+    </ResponseField>
+    
+    <ResponseField name="stopReason" type="string">
+      Why generation stopped ("stop", "length", "tool_use", etc.)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```typescript
+import { complete, getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("anthropic", "claude-4.5-sonnet-20250514");
+
+const message = await complete(model, {
+  systemPrompt: "You are a helpful assistant.",
+  messages: [
+    { role: "user", content: "Explain TypeScript generics", timestamp: Date.now() }
+  ],
+}, {
+  temperature: 0.7,
+  maxTokens: 1000,
+});
+
+console.log(message.content);
+console.log(`Tokens used: ${message.usage.input + message.usage.output}`);
+```
+
+## completeSimple
+
+Get a complete response with unified reasoning parameter.
+
+```typescript
+completeSimple<TApi extends Api>(
+  model: Model<TApi>,
+  context: Context,
+  options?: SimpleStreamOptions
+): Promise<AssistantMessage>
+```
+
+<ParamField path="model" type="Model<TApi>" required>
+  The model to use for generation
+</ParamField>
+
+<ParamField path="context" type="Context" required>
+  Conversation context
+</ParamField>
+
+<ParamField path="options" type="SimpleStreamOptions">
+  Same options as `streamSimple()` (see [Stream Functions](/api/ai/stream))
+</ParamField>
+
+### Example
+
+```typescript
+import { completeSimple, getModel } from "@mariozechner/pi-ai";
+
+const model = getModel("openai", "gpt-5.3-codex");
+
+const message = await completeSimple(model, {
+  systemPrompt: "You are a coding assistant.",
+  messages: [
+    { role: "user", content: "Write a Fibonacci function", timestamp: Date.now() }
+  ],
+}, {
+  reasoning: "medium",
+  temperature: 0.7,
+});
+
+// Extract thinking and text
+const thinking = message.content.filter(c => c.type === "thinking");
+const text = message.content.filter(c => c.type === "text");
+
+console.log("Thinking:", thinking);
+console.log("Response:", text);
+```
+
+## Error Handling
+
+Both functions throw errors on failure:
+
+```typescript
+try {
+  const message = await complete(model, context, options);
+  console.log(message.content);
+} catch (error) {
+  if (error.name === "AbortError") {
+    console.log("Request was cancelled");
+  } else if (error.message.includes("context_length_exceeded")) {
+    console.log("Context too long");
+  } else {
+    console.error("API error:", error);
+  }
+}
+```
+
+## Cancellation
+
+Use `AbortSignal` to cancel requests:
+
+```typescript
+const controller = new AbortController();
+
+// Cancel after 10 seconds
+setTimeout(() => controller.abort(), 10000);
+
+try {
+  const message = await complete(model, context, {
+    signal: controller.signal,
+  });
+  console.log(message.content);
+} catch (error) {
+  if (error.name === "AbortError") {
+    console.log("Request timed out");
+  }
+}
+```
+
+## Tool Calls
+
+When the response includes tool calls:
+
+```typescript
+const message = await complete(model, {
+  systemPrompt: "You are a helpful assistant.",
+  messages: [
+    { role: "user", content: "What's the weather?", timestamp: Date.now() }
+  ],
+  tools: [
+    {
+      type: "function",
+      function: {
+        name: "get_weather",
+        description: "Get current weather",
+        parameters: {
+          type: "object",
+          properties: {
+            location: { type: "string" },
+          },
+          required: ["location"],
+        },
+      },
+    },
+  ],
+});
+
+// Check for tool calls
+const toolCalls = message.content.filter(c => c.type === "toolCall");
+if (toolCalls.length > 0) {
+  console.log("Tool calls:", toolCalls);
+  // Execute tools and send results back
+}
+```
+
+## Usage Statistics
+
+All responses include token usage:
+
+```typescript
+const message = await complete(model, context);
+
+console.log("Input tokens:", message.usage.input);
+console.log("Output tokens:", message.usage.output);
+console.log("Cache read:", message.usage.cacheRead);
+console.log("Cache write:", message.usage.cacheWrite);
+console.log("Cost:", message.usage.cost.total);
+```
+
+## Comparison with Stream
+
+| Use Case | Function | When to Use |
+|----------|----------|-------------|
+| Real-time output | `stream()` / `streamSimple()` | Interactive applications, showing progress |
+| Batch processing | `complete()` / `completeSimple()` | Background tasks, API servers |
+| Tool execution | `stream()` | Need to show tool execution progress |
+| Simple Q&A | `complete()` | Just need the final answer |
+
+## Performance
+
+`complete()` and `completeSimple()` have the same performance as their streaming counterparts - they just buffer the events internally:
+
+```typescript
+// These are equivalent:
+const message1 = await complete(model, context);
+
+const stream = stream(model, context);
+const message2 = await stream.result();
+
+// Both take the same time and use the same network requests
+```

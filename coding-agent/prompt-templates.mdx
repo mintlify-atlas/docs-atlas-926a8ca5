@@ -1,0 +1,443 @@
+---
+title: "Prompt Templates"
+description: "Creating reusable prompt templates with variable substitution for Pi coding agent"
+---
+
+<Note>
+Pi can create prompt templates for you. Just ask it to build one for your workflow.
+</Note>
+
+Prompt templates are Markdown snippets that expand into full prompts. Type `/name` in the editor to invoke a template, where `name` is the filename without `.md`.
+
+## Template Locations
+
+Pi loads prompt templates from:
+
+**Global:**
+- `~/.pi/agent/prompts/*.md`
+
+**Project:**
+- `.pi/prompts/*.md`
+
+**Packages:**
+- `prompts/` directories in pi packages
+- `pi.prompts` entries in `package.json`
+
+**Settings:**
+- `prompts` array with files or directories
+
+**CLI:**
+- `--prompt-template <path>` (repeatable)
+
+Disable discovery with `--no-prompt-templates`.
+
+## Template Format
+
+```markdown
+---
+description: Review staged git changes
+---
+Review the staged changes (`git diff --cached`). Focus on:
+- Bugs and logic errors
+- Security issues
+- Error handling gaps
+```
+
+**Rules:**
+- The filename becomes the command name. `review.md` becomes `/review`
+- `description` is optional. If missing, the first non-empty line is used
+- Everything after the frontmatter is the template content
+
+## Basic Usage
+
+Type `/` followed by the template name:
+
+```
+/review
+```
+
+The template content replaces the `/review` text in the editor, then you can submit or edit further.
+
+## Arguments
+
+Templates support positional arguments and simple slicing:
+
+<ParamField path="$1, $2, ..." type="string">
+  Positional arguments
+</ParamField>
+
+<ParamField path="$@ or $ARGUMENTS" type="string">
+  All arguments joined with spaces
+</ParamField>
+
+<ParamField path="${@:N}" type="string">
+  Arguments from the Nth position (1-indexed)
+</ParamField>
+
+<ParamField path="${@:N:L}" type="string">
+  L arguments starting at position N
+</ParamField>
+
+### Example: Component Template
+
+**File:** `~/.pi/agent/prompts/component.md`
+
+```markdown
+---
+description: Create a React component
+---
+Create a React component named $1 with features: ${@:2}
+
+Requirements:
+- TypeScript
+- Proper types
+- Tests with vitest
+```
+
+**Usage:**
+```
+/component Button "onClick handler" "disabled support" "loading state"
+```
+
+**Expands to:**
+```
+Create a React component named Button with features: onClick handler disabled support loading state
+
+Requirements:
+- TypeScript
+- Proper types
+- Tests with vitest
+```
+
+## Examples
+
+### Code Review
+
+**File:** `~/.pi/agent/prompts/review.md`
+
+```markdown
+---
+description: Review staged git changes
+---
+Review the staged changes (`git diff --cached`). Focus on:
+- Bugs and logic errors
+- Security issues
+- Error handling gaps
+- Performance problems
+- Code style inconsistencies
+
+Provide actionable feedback.
+```
+
+**Usage:**
+```
+/review
+```
+
+### Test Generation
+
+**File:** `~/.pi/agent/prompts/test.md`
+
+```markdown
+---
+description: Generate tests for a function or module
+---
+Generate comprehensive tests for $1 using $2.
+
+Include:
+- Happy path tests
+- Edge cases
+- Error handling
+- Mocks where appropriate
+
+Use descriptive test names.
+```
+
+**Usage:**
+```
+/test src/utils/parser.ts vitest
+```
+
+### Documentation
+
+**File:** `~/.pi/agent/prompts/doc.md`
+
+```markdown
+---
+description: Add documentation to code
+---
+Add comprehensive documentation to $1.
+
+Include:
+- JSDoc/TSDoc comments for all public APIs
+- Parameter descriptions
+- Return value descriptions
+- Usage examples
+- Edge cases and gotchas
+```
+
+**Usage:**
+```
+/doc src/api/users.ts
+```
+
+### Refactoring
+
+**File:** `~/.pi/agent/prompts/refactor.md`
+
+```markdown
+---
+description: Refactor code with specific goal
+---
+Refactor $1 to $2.
+
+Objectives:
+- Maintain existing functionality
+- Improve code quality
+- Keep tests passing
+- Follow project conventions
+
+Explain the changes you make.
+```
+
+**Usage:**
+```
+/refactor src/components/Form.tsx "use React Hook Form"
+```
+
+### Bug Analysis
+
+**File:** `~/.pi/agent/prompts/debug.md`
+
+```markdown
+---
+description: Debug an issue
+---
+Debug this issue: $@
+
+Steps:
+1. Identify the root cause
+2. Explain why it happens
+3. Propose a fix
+4. Consider edge cases
+5. Suggest prevention strategies
+```
+
+**Usage:**
+```
+/debug "Login fails when username contains spaces"
+```
+
+## Advanced Usage
+
+### Conditional Content
+
+Use argument presence to include conditional content:
+
+```markdown
+---
+description: Create API endpoint
+---
+Create a $1 API endpoint at $2${3:+ with authentication}.
+
+Implement:
+- Request validation
+- Error handling
+- Response formatting
+${3:+- Authentication checks}
+```
+
+The `${3:+text}` syntax includes ` with authentication` only if argument 3 is provided.
+
+### Multiple Files
+
+Reference multiple files:
+
+```markdown
+---
+description: Compare implementations
+---
+Compare the implementations in:
+- $1
+- $2
+
+Highlight:
+- Differences in approach
+- Pros and cons of each
+- Recommendation for which to use
+```
+
+**Usage:**
+```
+/compare @src/v1/parser.ts @src/v2/parser.ts
+```
+
+## Loading Rules
+
+<Info>
+Template discovery in `prompts/` is **non-recursive**. Only files directly in the directory are loaded.
+</Info>
+
+For templates in subdirectories, add them explicitly:
+
+```json
+{
+  "prompts": [
+    "./prompts",
+    "./prompts/team",
+    "./prompts/personal"
+  ]
+}
+```
+
+Or use a pi package manifest:
+
+```json
+{
+  "pi": {
+    "prompts": [
+      "./prompts/**/*.md"
+    ]
+  }
+}
+```
+
+## Naming Collisions
+
+If multiple templates have the same name:
+1. Project templates override global templates
+2. Later paths in settings override earlier ones
+3. A warning is shown in verbose startup
+
+## Creating Templates
+
+<Steps>
+  <Step title="Create File">
+    ```bash
+    mkdir -p ~/.pi/agent/prompts
+    vim ~/.pi/agent/prompts/review.md
+    ```
+  </Step>
+  
+  <Step title="Add Frontmatter">
+    ```markdown
+    ---
+    description: Review code for issues
+    ---
+    ```
+  </Step>
+  
+  <Step title="Write Template">
+    ```markdown
+    Review the following for:
+    - Security issues
+    - Performance problems
+    - Best practices
+    ```
+  </Step>
+  
+  <Step title="Test">
+    ```bash
+    pi
+    /review
+    ```
+  </Step>
+</Steps>
+
+## Sharing Templates
+
+Package templates for others:
+
+<Steps>
+  <Step title="Create Package">
+    ```json
+    {
+      "name": "my-prompts",
+      "keywords": ["pi-package"],
+      "pi": {
+        "prompts": ["./prompts"]
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Add Templates">
+    ```
+    my-prompts/
+    ├── package.json
+    └── prompts/
+        ├── review.md
+        ├── test.md
+        └── doc.md
+    ```
+  </Step>
+  
+  <Step title="Publish">
+    ```bash
+    npm publish
+    ```
+  </Step>
+  
+  <Step title="Users Install">
+    ```bash
+    pi install npm:my-prompts
+    ```
+  </Step>
+</Steps>
+
+See [Pi Packages](/coding-agent/pi-packages) for full details.
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Be Specific" icon="bullseye">
+    Write focused templates for specific tasks rather than generic prompts
+  </Card>
+  
+  <Card title="Use Arguments" icon="dollar-sign">
+    Leverage `$1`, `$2`, `$@` for flexibility without creating many similar templates
+  </Card>
+  
+  <Card title="Include Context" icon="book">
+    Provide enough context in the template for the model to understand requirements
+  </Card>
+  
+  <Card title="Show Examples" icon="lightbulb">
+    Include example usage in comments or description for other users
+  </Card>
+  
+  <Card title="Keep It Short" icon="compress">
+    Templates should be reusable snippets, not complete instructions. Save complex workflows for Skills.
+  </Card>
+  
+  <Card title="Name Clearly" icon="tag">
+    Use descriptive filenames that clearly indicate the template's purpose
+  </Card>
+</CardGroup>
+
+## Templates vs Skills
+
+**Use templates for:**
+- Quick prompts and reminders
+- Common review patterns
+- Standard questions
+- Short, reusable text
+
+**Use skills for:**
+- Multi-step workflows
+- External tool integration
+- Complex setup procedures
+- On-demand documentation
+
+See [Skills](/coding-agent/skills) for more information.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Skills" icon="book" href="/coding-agent/skills">
+    Create Agent Skills for complex workflows
+  </Card>
+  <Card title="Pi Packages" icon="box" href="/coding-agent/pi-packages">
+    Package and share templates via npm or git
+  </Card>
+</CardGroup>

@@ -1,0 +1,414 @@
+---
+title: TUI Components
+description: Terminal UI components for building interactive interfaces
+---
+
+The `@mariozechner/pi-tui` package provides components for building terminal user interfaces.
+
+## Import
+
+```typescript
+import {
+  TUI,
+  Container,
+  Box,
+  Text,
+  Editor,
+  SelectList,
+  Markdown,
+  Loader,
+} from "@mariozechner/pi-tui";
+```
+
+## Core Components
+
+### TUI
+
+The main TUI manager that handles rendering and input.
+
+```typescript
+const tui = new TUI(terminal);
+```
+
+<ParamField path="terminal" type="Terminal" required>
+  Terminal interface (use `ProcessTerminal` for stdio)
+</ParamField>
+
+**Methods:**
+
+- `render(component: Component)` - Render a component
+- `showOverlay(component: Component, options?: OverlayOptions)` - Show an overlay
+- `hideOverlay(handle: OverlayHandle)` - Hide an overlay
+- `focus(component: Component)` - Focus a component
+- `addInputListener(listener: (data: string) => { consume?: boolean })` - Add input listener
+- `close()` - Clean up and restore terminal
+
+### Container
+
+Container for multiple components with vertical layout.
+
+```typescript
+const container = new Container();
+container.addChild(component1);
+container.addChild(component2);
+```
+
+**Methods:**
+
+- `addChild(component: Component)` - Add a child component
+- `removeChild(component: Component)` - Remove a child component
+- `clear()` - Remove all children
+
+### Box
+
+Box container with borders and padding.
+
+```typescript
+const box = new Box({
+  border: "rounded",
+  borderColor: "blue",
+  padding: { top: 1, right: 2, bottom: 1, left: 2 },
+  title: "Settings",
+});
+box.addChild(content);
+```
+
+<ParamField path="options" type="BoxOptions">
+  <Expandable title="properties">
+    <ParamField path="border" type="'single' | 'double' | 'rounded' | 'none'">
+      Border style. Default: `'single'`
+    </ParamField>
+    
+    <ParamField path="borderColor" type="string">
+      Border color (e.g., `'blue'`, `'#ff0000'`)
+    </ParamField>
+    
+    <ParamField path="padding" type="Padding">
+      Padding (top, right, bottom, left)
+    </ParamField>
+    
+    <ParamField path="title" type="string">
+      Title displayed at top of border
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Text
+
+Simple text component.
+
+```typescript
+const text = new Text("Hello, world!");
+text.setText("New text");
+```
+
+**Methods:**
+
+- `setText(text: string)` - Update text content
+- `getText()` - Get current text
+
+### TruncatedText
+
+Text with automatic truncation.
+
+```typescript
+const text = new TruncatedText("Very long text...", {
+  maxLines: 10,
+  ellipsis: true,
+});
+```
+
+<ParamField path="options" type="TruncatedTextOptions">
+  <Expandable title="properties">
+    <ParamField path="maxLines" type="number">
+      Maximum lines to display
+    </ParamField>
+    
+    <ParamField path="ellipsis" type="boolean">
+      Show ellipsis when truncated. Default: `true`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Spacer
+
+Vertical spacing component.
+
+```typescript
+const spacer = new Spacer(2); // 2 blank lines
+```
+
+## Input Components
+
+### Editor
+
+Multi-line text editor with syntax highlighting.
+
+```typescript
+const editor = new Editor({
+  placeholder: "Type your message...",
+  language: "markdown",
+  theme: editorTheme,
+  keybindings: DEFAULT_EDITOR_KEYBINDINGS,
+});
+
+editor.setText("Initial text");
+const content = editor.getText();
+```
+
+<ParamField path="options" type="EditorOptions">
+  <Expandable title="properties">
+    <ParamField path="placeholder" type="string">
+      Placeholder text
+    </ParamField>
+    
+    <ParamField path="language" type="string">
+      Language for syntax highlighting (e.g., `'typescript'`, `'markdown'`)
+    </ParamField>
+    
+    <ParamField path="theme" type="EditorTheme">
+      Color theme
+    </ParamField>
+    
+    <ParamField path="keybindings" type="EditorKeybindingsConfig">
+      Keyboard shortcuts
+    </ParamField>
+    
+    <ParamField path="autocomplete" type="AutocompleteProvider">
+      Autocomplete provider
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Methods:**
+
+- `setText(text: string)` - Set editor content
+- `getText()` - Get editor content
+- `clear()` - Clear editor
+- `focus()` - Focus the editor
+- `on(event: string, handler: Function)` - Subscribe to events
+
+**Events:**
+
+- `submit` - User pressed Enter/Ctrl+Enter
+- `cancel` - User pressed Escape
+- `change` - Text changed
+
+### SelectList
+
+Selectable list with keyboard navigation.
+
+```typescript
+const list = new SelectList({
+  items: [
+    { id: "1", label: "Option 1" },
+    { id: "2", label: "Option 2" },
+  ],
+  theme: selectListTheme,
+});
+
+list.on("select", (item) => {
+  console.log(`Selected: ${item.id}`);
+});
+```
+
+<ParamField path="options" type="SelectListOptions">
+  <Expandable title="properties">
+    <ParamField path="items" type="SelectItem[]" required>
+      List items
+    </ParamField>
+    
+    <ParamField path="theme" type="SelectListTheme">
+      Color theme
+    </ParamField>
+    
+    <ParamField path="searchable" type="boolean">
+      Enable fuzzy search. Default: `false`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Methods:**
+
+- `setItems(items: SelectItem[])` - Update items
+- `getSelectedItem()` - Get selected item
+- `on(event: string, handler: Function)` - Subscribe to events
+
+**Events:**
+
+- `select` - Item selected
+- `cancel` - User pressed Escape
+
+### SettingsList
+
+Settings list with keyboard navigation.
+
+```typescript
+const settings = new SettingsList({
+  items: [
+    { id: "theme", label: "Theme", value: "dark" },
+    { id: "font", label: "Font Size", value: "14" },
+  ],
+  theme: settingsListTheme,
+});
+```
+
+### Input
+
+Single-line text input.
+
+```typescript
+const input = new Input({
+  placeholder: "Enter text...",
+});
+
+input.on("submit", (value) => {
+  console.log(`Input: ${value}`);
+});
+```
+
+## Display Components
+
+### Markdown
+
+Markdown renderer with syntax highlighting.
+
+```typescript
+const markdown = new Markdown("# Hello\n\nWorld!", {
+  theme: markdownTheme,
+});
+```
+
+<ParamField path="options" type="MarkdownOptions">
+  <Expandable title="properties">
+    <ParamField path="theme" type="MarkdownTheme">
+      Color theme
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Methods:**
+
+- `setContent(markdown: string)` - Update content
+
+### Image
+
+Image display with iTerm2/Kitty protocol support.
+
+```typescript
+const image = new Image({
+  data: base64Data,
+  mimeType: "image/png",
+  maxWidth: 80,
+  maxHeight: 24,
+});
+```
+
+<ParamField path="options" type="ImageOptions" required>
+  <Expandable title="properties">
+    <ParamField path="data" type="string" required>
+      Base64 encoded image data
+    </ParamField>
+    
+    <ParamField path="mimeType" type="string" required>
+      MIME type (e.g., `'image/png'`)
+    </ParamField>
+    
+    <ParamField path="maxWidth" type="number">
+      Maximum width in columns
+    </ParamField>
+    
+    <ParamField path="maxHeight" type="number">
+      Maximum height in rows
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Loader
+
+Spinner animation.
+
+```typescript
+const loader = new Loader();
+loader.start();
+// ...
+loader.stop();
+```
+
+### CancellableLoader
+
+Loader with cancel button.
+
+```typescript
+const loader = new CancellableLoader("Loading...", "Press Ctrl+C to cancel");
+loader.on("cancel", () => {
+  console.log("Cancelled");
+});
+```
+
+## Example: Complete UI
+
+```typescript
+import {
+  TUI,
+  ProcessTerminal,
+  Container,
+  Box,
+  Text,
+  Editor,
+  SelectList,
+} from "@mariozechner/pi-tui";
+
+const terminal = new ProcessTerminal();
+const tui = new TUI(terminal);
+
+// Create layout
+const container = new Container();
+
+// Title
+const title = new Box({ title: "My App" });
+title.addChild(new Text("Welcome!"));
+container.addChild(title);
+
+// Editor
+const editor = new Editor({
+  placeholder: "Type a message...",
+});
+container.addChild(editor);
+
+// Submit handler
+editor.on("submit", () => {
+  const text = editor.getText();
+  console.log(`Submitted: ${text}`);
+  editor.clear();
+});
+
+// Render
+tui.render(container);
+tui.focus(editor);
+
+// Show dialog overlay
+const showDialog = () => {
+  const list = new SelectList({
+    items: [
+      { id: "1", label: "Option 1" },
+      { id: "2", label: "Option 2" },
+    ],
+  });
+  
+  const handle = tui.showOverlay(list, {
+    anchor: "center",
+    width: 40,
+    maxHeight: 10,
+  });
+  
+  list.on("select", (item) => {
+    console.log(`Selected: ${item.label}`);
+    tui.hideOverlay(handle);
+  });
+  
+  list.on("cancel", () => {
+    tui.hideOverlay(handle);
+  });
+};
+```

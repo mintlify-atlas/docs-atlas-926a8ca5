@@ -1,0 +1,413 @@
+---
+title: Building TypeScript Extensions
+description: Learn how to extend Pi with custom tools, event handlers, and UI components using TypeScript
+---
+
+Extensions are TypeScript modules that extend Pi's behavior. They can register custom tools, subscribe to lifecycle events, add commands, and create custom UI components.
+
+## What You Can Build
+
+Extensions enable:
+
+- **Custom tools** - Register tools the LLM can call via `pi.registerTool()`
+- **Event interception** - Block or modify tool calls, inject context, customize compaction
+- **User interaction** - Prompt users via `ctx.ui` (select, confirm, input, notify)
+- **Custom UI components** - Full TUI components with keyboard input
+- **Custom commands** - Register commands like `/mycommand`
+- **Session persistence** - Store state that survives restarts
+- **Custom rendering** - Control how tool calls/results and messages appear
+
+## Quick Start
+
+Create `~/.pi/agent/extensions/my-extension.ts`:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+
+export default function (pi: ExtensionAPI) {
+  // React to events
+  pi.on("session_start", async (_event, ctx) => {
+    ctx.ui.notify("Extension loaded!", "info");
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName === "bash" && event.input.command?.includes("rm -rf")) {
+      const ok = await ctx.ui.confirm("Dangerous!", "Allow rm -rf?");
+      if (!ok) return { block: true, reason: "Blocked by user" };
+    }
+  });
+
+  // Register a custom tool
+  pi.registerTool({
+    name: "greet",
+    label: "Greet",
+    description: "Greet someone by name",
+    parameters: Type.Object({
+      name: Type.String({ description: "Name to greet" }),
+    }),
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      return {
+        content: [{ type: "text", text: `Hello, ${params.name}!` }],
+        details: {},
+      };
+    },
+  });
+
+  // Register a command
+  pi.registerCommand("hello", {
+    description: "Say hello",
+    handler: async (args, ctx) => {
+      ctx.ui.notify(`Hello ${args || "world"}!`, "info");
+    },
+  });
+}
+```
+
+Test with:
+
+```bash
+pi -e ./my-extension.ts
+```
+
+## Extension Structure
+
+<Steps>
+
+### Create Extension File
+
+Extensions export a default function that receives `ExtensionAPI`:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  // Extension code
+}
+```
+
+### Choose Location
+
+Extensions are auto-discovered from:
+
+| Location | Scope |
+|----------|-------|
+| `~/.pi/agent/extensions/*.ts` | Global (all projects) |
+| `~/.pi/agent/extensions/*/index.ts` | Global (subdirectory) |
+| `.pi/extensions/*.ts` | Project-local |
+| `.pi/extensions/*/index.ts` | Project-local (subdirectory) |
+
+Additional paths via `settings.json`:
+
+```json
+{
+  "extensions": [
+    "/path/to/local/extension.ts",
+    "/path/to/local/extension/dir"
+  ]
+}
+```
+
+### Add Dependencies (Optional)
+
+For extensions that need npm packages, add a `package.json`:
+
+```
+~/.pi/agent/extensions/
+└── my-extension/
+    ├── package.json
+    ├── package-lock.json
+    ├── node_modules/
+    └── index.ts
+```
+
+```json
+{
+  "name": "my-extension",
+  "dependencies": {
+    "axios": "^1.0.0"
+  }
+}
+```
+
+Run `npm install` in the extension directory.
+
+</Steps>
+
+## Building a Custom Tool
+
+<Steps>
+
+### Define Tool Schema
+
+Use TypeBox to define parameters:
+
+```typescript
+import { Type } from "@sinclair/typebox";
+import { StringEnum } from "@mariozechner/pi-ai";
+
+pi.registerTool({
+  name: "search",
+  label: "Search",
+  description: "Search for content",
+  parameters: Type.Object({
+    query: Type.String({ description: "Search query" }),
+    type: StringEnum(["web", "code"] as const),
+    limit: Type.Optional(Type.Number({ minimum: 1, maximum: 100 })),
+  }),
+  // ...
+});
+```
+
+<Note>
+Use `StringEnum` from `@mariozechner/pi-ai` for string enums. `Type.Union`/`Type.Literal` doesn't work with Google's API.
+</Note>
+
+### Implement Execution
+
+The `execute` function runs when the LLM calls the tool:
+
+```typescript
+async execute(toolCallId, params, signal, onUpdate, ctx) {
+  // Check for cancellation
+  if (signal?.aborted) {
+    return { content: [{ type: "text", text: "Cancelled" }] };
+  }
+
+  // Stream progress updates
+  onUpdate?.({
+    content: [{ type: "text", text: "Searching..." }],
+    details: { progress: 50 },
+  });
+
+  // Perform the work
+  const results = await performSearch(params.query);
+
+  // Return result
+  return {
+    content: [{ type: "text", text: JSON.stringify(results) }],
+    details: { count: results.length },
+  };
+}
+```
+
+### Add Custom Rendering (Optional)
+
+Customize how the tool appears in the TUI:
+
+```typescript
+import { Text } from "@mariozechner/pi-tui";
+
+renderCall(args, theme) {
+  let text = theme.fg("toolTitle", theme.bold("search "));
+  text += theme.fg("muted", args.query);
+  return new Text(text, 0, 0);
+}
+
+renderResult(result, { expanded }, theme) {
+  if (result.details?.error) {
+    return new Text(theme.fg("error", `Error: ${result.details.error}`), 0, 0);
+  }
+
+  let text = theme.fg("success", `✓ Found ${result.details?.count} results`);
+  if (expanded) {
+    // Show full results when expanded (Ctrl+O)
+    text += "\n" + result.content[0].text;
+  }
+  return new Text(text, 0, 0);
+}
+```
+
+</Steps>
+
+## Complete Tool Example
+
+Here's a complete working example:
+
+```typescript
+import { Type } from "@sinclair/typebox";
+import { Text } from "@mariozechner/pi-tui";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerTool({
+    name: "hello",
+    label: "Hello",
+    description: "A simple greeting tool",
+    parameters: Type.Object({
+      name: Type.String({ description: "Name to greet" }),
+    }),
+
+    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+      const { name } = params as { name: string };
+      return {
+        content: [{ type: "text", text: `Hello, ${name}!` }],
+        details: { greeted: name },
+      };
+    },
+
+    renderCall(args, theme) {
+      return new Text(
+        theme.fg("toolTitle", theme.bold("hello ")) +
+        theme.fg("muted", args.name),
+        0, 0
+      );
+    },
+
+    renderResult(result, options, theme) {
+      return new Text(
+        theme.fg("success", result.content[0].text),
+        0, 0
+      );
+    },
+  });
+}
+```
+
+## Event Handling
+
+Subscribe to lifecycle events:
+
+<Tabs>
+  <Tab title="Session Events">
+    ```typescript
+    pi.on("session_start", async (_event, ctx) => {
+      // Session started
+    });
+
+    pi.on("session_shutdown", async (_event, ctx) => {
+      // Clean up resources
+    });
+    ```
+  </Tab>
+  <Tab title="Tool Events">
+    ```typescript
+    import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
+
+    pi.on("tool_call", async (event, ctx) => {
+      if (isToolCallEventType("bash", event)) {
+        // event.input is typed as { command: string }
+        if (event.input.command.includes("rm -rf")) {
+          return { block: true, reason: "Dangerous" };
+        }
+      }
+    });
+
+    pi.on("tool_result", async (event, ctx) => {
+      // Modify tool results
+      return { content: [...], details: {...} };
+    });
+    ```
+  </Tab>
+  <Tab title="Message Events">
+    ```typescript
+    pi.on("message_update", async (event, ctx) => {
+      if (event.assistantMessageEvent.type === "text_delta") {
+        // Process streaming text
+      }
+    });
+
+    pi.on("before_agent_start", async (event, ctx) => {
+      return {
+        message: {
+          customType: "my-extension",
+          content: "Additional context",
+          display: true,
+        },
+      };
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## State Management
+
+Store state in tool result `details` for proper branching support:
+
+```typescript
+export default function (pi: ExtensionAPI) {
+  let items: string[] = [];
+
+  // Reconstruct state from session
+  pi.on("session_start", async (_event, ctx) => {
+    items = [];
+    for (const entry of ctx.sessionManager.getBranch()) {
+      if (entry.type === "message" && entry.message.role === "toolResult") {
+        if (entry.message.toolName === "my_tool") {
+          items = entry.message.details?.items ?? [];
+        }
+      }
+    }
+  });
+
+  pi.registerTool({
+    name: "my_tool",
+    // ...
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      items.push("new item");
+      return {
+        content: [{ type: "text", text: "Added" }],
+        details: { items: [...items] },  // Store for reconstruction
+      };
+    },
+  });
+}
+```
+
+## User Interaction
+
+Prompt users with dialogs:
+
+<Tabs>
+  <Tab title="Confirmation">
+    ```typescript
+    const ok = await ctx.ui.confirm("Delete?", "This cannot be undone");
+    if (!ok) return;
+    ```
+  </Tab>
+  <Tab title="Selection">
+    ```typescript
+    const choice = await ctx.ui.select("Pick one:", ["A", "B", "C"]);
+    ```
+  </Tab>
+  <Tab title="Input">
+    ```typescript
+    const name = await ctx.ui.input("Name:", "placeholder");
+    ```
+  </Tab>
+  <Tab title="Editor">
+    ```typescript
+    const text = await ctx.ui.editor("Edit:", "prefilled text");
+    ```
+  </Tab>
+  <Tab title="Notification">
+    ```typescript
+    ctx.ui.notify("Done!", "info");  // "info" | "warning" | "error"
+    ```
+  </Tab>
+</Tabs>
+
+## Available Imports
+
+```typescript
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  // Event types
+  AgentSessionEvent,
+  ToolCallEvent,
+  // Tool types
+  ToolDefinition,
+  ToolInfo,
+} from "@mariozechner/pi-coding-agent";
+
+import { Type } from "@sinclair/typebox";
+import { StringEnum } from "@mariozechner/pi-ai";
+import { Text, Container, SelectList } from "@mariozechner/pi-tui";
+```
+
+## Next Steps
+
+- See [Creating Skills](/guides/creating-skills) for specialized task workflows
+- See [Custom Providers](/guides/custom-providers) for adding LLM providers
+- Check `packages/coding-agent/examples/extensions/` for more examples

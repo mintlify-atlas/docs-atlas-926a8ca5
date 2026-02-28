@@ -1,0 +1,554 @@
+---
+title: "Themes"
+description: "Customizing Pi's terminal UI colors and appearance with JSON themes"
+---
+
+<Note>
+Pi can create themes for you. Just ask it to build one for your setup.
+</Note>
+
+Themes are JSON files that define colors for the TUI (Terminal User Interface). Pi supports 24-bit RGB colors and includes built-in dark and light themes.
+
+## Theme Locations
+
+Pi loads themes from:
+
+**Built-in:**
+- `dark`, `light`
+
+**Global:**
+- `~/.pi/agent/themes/*.json`
+
+**Project:**
+- `.pi/themes/*.json`
+
+**Packages:**
+- `themes/` directories in pi packages
+- `pi.themes` entries in `package.json`
+
+**Settings:**
+- `themes` array with files or directories
+
+**CLI:**
+- `--theme <path>` (repeatable)
+
+Disable discovery with `--no-themes`.
+
+## Selecting a Theme
+
+<Tabs>
+  <Tab title="Interactive">
+    Use `/settings` and select your theme from the menu
+  </Tab>
+  
+  <Tab title="settings.json">
+    ```json
+    {
+      "theme": "my-theme"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+On first run, Pi detects your terminal background and defaults to `dark` or `light`.
+
+## Creating a Custom Theme
+
+<Steps>
+  <Step title="Create File">
+    ```bash
+    mkdir -p ~/.pi/agent/themes
+    vim ~/.pi/agent/themes/my-theme.json
+    ```
+  </Step>
+  
+  <Step title="Define Colors">
+    ```json
+    {
+      "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+      "name": "my-theme",
+      "vars": {
+        "primary": "#00aaff",
+        "secondary": 242
+      },
+      "colors": {
+        "accent": "primary",
+        "border": "primary",
+        "borderAccent": "#00ffff",
+        "borderMuted": "secondary",
+        "success": "#00ff00",
+        "error": "#ff0000",
+        "warning": "#ffff00",
+        "muted": "secondary",
+        "dim": 240,
+        "text": "",
+        "thinkingText": "secondary",
+        "selectedBg": "#2d2d30",
+        "userMessageBg": "#2d2d30",
+        "userMessageText": "",
+        "customMessageBg": "#2d2d30",
+        "customMessageText": "",
+        "customMessageLabel": "primary",
+        "toolPendingBg": "#1e1e2e",
+        "toolSuccessBg": "#1e2e1e",
+        "toolErrorBg": "#2e1e1e",
+        "toolTitle": "primary",
+        "toolOutput": "",
+        "mdHeading": "#ffaa00",
+        "mdLink": "primary",
+        "mdLinkUrl": "secondary",
+        "mdCode": "#00ffff",
+        "mdCodeBlock": "",
+        "mdCodeBlockBorder": "secondary",
+        "mdQuote": "secondary",
+        "mdQuoteBorder": "secondary",
+        "mdHr": "secondary",
+        "mdListBullet": "#00ffff",
+        "toolDiffAdded": "#00ff00",
+        "toolDiffRemoved": "#ff0000",
+        "toolDiffContext": "secondary",
+        "syntaxComment": "secondary",
+        "syntaxKeyword": "primary",
+        "syntaxFunction": "#00aaff",
+        "syntaxVariable": "#ffaa00",
+        "syntaxString": "#00ff00",
+        "syntaxNumber": "#ff00ff",
+        "syntaxType": "#00aaff",
+        "syntaxOperator": "primary",
+        "syntaxPunctuation": "secondary",
+        "thinkingOff": "secondary",
+        "thinkingMinimal": "primary",
+        "thinkingLow": "#00aaff",
+        "thinkingMedium": "#00ffff",
+        "thinkingHigh": "#ff00ff",
+        "thinkingXhigh": "#ff0000",
+        "bashMode": "#ffaa00"
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Select Theme">
+    Use `/settings` or edit `settings.json`
+  </Step>
+  
+  <Step title="Hot Reload">
+    Edit the active theme file - Pi reloads it automatically!
+  </Step>
+</Steps>
+
+<Info>
+**Hot reload:** When you edit the currently active custom theme file, Pi reloads it automatically for immediate visual feedback.
+</Info>
+
+## Theme Format
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+  "name": "my-theme",
+  "vars": {
+    "blue": "#0066cc",
+    "gray": 242
+  },
+  "colors": {
+    "accent": "blue",
+    "muted": "gray",
+    "text": "",
+    // ... all 51 color tokens
+  }
+}
+```
+
+**Fields:**
+- `name` - Required, must be unique
+- `vars` - Optional reusable colors
+- `colors` - Required, must define all 51 tokens
+
+The `$schema` field enables editor auto-completion and validation.
+
+## Color Tokens
+
+<Warning>
+Every theme must define **all 51 color tokens**. There are no optional colors.
+</Warning>
+
+### Core UI (11 colors)
+
+<ParamField path="accent" type="color">
+  Primary accent (logo, selected items, cursor)
+</ParamField>
+
+<ParamField path="border" type="color">
+  Normal borders
+</ParamField>
+
+<ParamField path="borderAccent" type="color">
+  Highlighted borders
+</ParamField>
+
+<ParamField path="borderMuted" type="color">
+  Subtle borders (editor)
+</ParamField>
+
+<ParamField path="success" type="color">
+  Success states
+</ParamField>
+
+<ParamField path="error" type="color">
+  Error states
+</ParamField>
+
+<ParamField path="warning" type="color">
+  Warning states
+</ParamField>
+
+<ParamField path="muted" type="color">
+  Secondary text
+</ParamField>
+
+<ParamField path="dim" type="color">
+  Tertiary text
+</ParamField>
+
+<ParamField path="text" type="color">
+  Default text (usually `""`)
+</ParamField>
+
+<ParamField path="thinkingText" type="color">
+  Thinking block text
+</ParamField>
+
+### Backgrounds & Content (11 colors)
+
+<ParamField path="selectedBg" type="color">
+  Selected line background
+</ParamField>
+
+<ParamField path="userMessageBg" type="color">
+  User message background
+</ParamField>
+
+<ParamField path="userMessageText" type="color">
+  User message text
+</ParamField>
+
+<ParamField path="customMessageBg" type="color">
+  Extension message background
+</ParamField>
+
+<ParamField path="customMessageText" type="color">
+  Extension message text
+</ParamField>
+
+<ParamField path="customMessageLabel" type="color">
+  Extension message label
+</ParamField>
+
+<ParamField path="toolPendingBg" type="color">
+  Tool box (pending)
+</ParamField>
+
+<ParamField path="toolSuccessBg" type="color">
+  Tool box (success)
+</ParamField>
+
+<ParamField path="toolErrorBg" type="color">
+  Tool box (error)
+</ParamField>
+
+<ParamField path="toolTitle" type="color">
+  Tool title
+</ParamField>
+
+<ParamField path="toolOutput" type="color">
+  Tool output text
+</ParamField>
+
+### Markdown (10 colors)
+
+| Token | Purpose |
+|-------|----------|
+| `mdHeading` | Headings |
+| `mdLink` | Link text |
+| `mdLinkUrl` | Link URL |
+| `mdCode` | Inline code |
+| `mdCodeBlock` | Code block content |
+| `mdCodeBlockBorder` | Code block fences |
+| `mdQuote` | Blockquote text |
+| `mdQuoteBorder` | Blockquote border |
+| `mdHr` | Horizontal rule |
+| `mdListBullet` | List bullets |
+
+### Tool Diffs (3 colors)
+
+| Token | Purpose |
+|-------|----------|
+| `toolDiffAdded` | Added lines |
+| `toolDiffRemoved` | Removed lines |
+| `toolDiffContext` | Context lines |
+
+### Syntax Highlighting (9 colors)
+
+| Token | Purpose |
+|-------|----------|
+| `syntaxComment` | Comments |
+| `syntaxKeyword` | Keywords |
+| `syntaxFunction` | Function names |
+| `syntaxVariable` | Variables |
+| `syntaxString` | Strings |
+| `syntaxNumber` | Numbers |
+| `syntaxType` | Types |
+| `syntaxOperator` | Operators |
+| `syntaxPunctuation` | Punctuation |
+
+### Thinking Level Borders (6 colors)
+
+Editor border colors indicating thinking level (visual hierarchy from subtle to prominent):
+
+| Token | Purpose |
+|-------|----------|
+| `thinkingOff` | Thinking off |
+| `thinkingMinimal` | Minimal thinking |
+| `thinkingLow` | Low thinking |
+| `thinkingMedium` | Medium thinking |
+| `thinkingHigh` | High thinking |
+| `thinkingXhigh` | Extra high thinking |
+
+### Bash Mode (1 color)
+
+<ParamField path="bashMode" type="color">
+  Editor border in bash mode (`!` prefix)
+</ParamField>
+
+### HTML Export (optional)
+
+The `export` section controls colors for `/export` HTML output. If omitted, colors are derived from `userMessageBg`.
+
+```json
+{
+  "export": {
+    "pageBg": "#18181e",
+    "cardBg": "#1e1e24",
+    "infoBg": "#3c3728"
+  }
+}
+```
+
+## Color Values
+
+Four formats are supported:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| **Hex** | `"#ff0000"` | 6-digit hex RGB |
+| **256-color** | `39` | xterm 256-color palette index (0-255) |
+| **Variable** | `"primary"` | Reference to a `vars` entry |
+| **Default** | `""` | Terminal's default color |
+
+### 256-Color Palette
+
+- **0-15:** Basic ANSI colors (terminal-dependent)
+- **16-231:** 6×6×6 RGB cube (`16 + 36×R + 6×G + B` where R,G,B are 0-5)
+- **232-255:** Grayscale ramp
+
+### Terminal Compatibility
+
+Pi uses 24-bit RGB colors. Most modern terminals support this:
+
+<Check>
+  - iTerm2 (macOS)
+  - Kitty (Linux/macOS)
+  - WezTerm (cross-platform)
+  - Windows Terminal
+  - VS Code integrated terminal
+</Check>
+
+For older terminals with only 256-color support, Pi falls back to the nearest approximation.
+
+**Check truecolor support:**
+```bash
+echo $COLORTERM  # Should output "truecolor" or "24bit"
+```
+
+## Theme Variables
+
+Use `vars` to define reusable colors:
+
+```json
+{
+  "vars": {
+    "nord0": "#2e3440",
+    "nord1": "#3b4252",
+    "nord8": "#88c0d0",
+    "nord10": "#5e81ac"
+  },
+  "colors": {
+    "accent": "nord8",
+    "border": "nord10",
+    "muted": "nord1",
+    "selectedBg": "nord0",
+    // ...
+  }
+}
+```
+
+This makes it easy to:
+- Maintain color harmony
+- Try different base palettes
+- Update colors globally
+
+## Tips
+
+<AccordionGroup>
+  <Accordion title="Start with a base palette">
+    Use established color palettes for harmony:
+    
+    - Nord
+    - Gruvbox
+    - Tokyo Night
+    - Dracula
+    - Solarized
+    
+    Define them in `vars` and reference consistently.
+  </Accordion>
+  
+  <Accordion title="Consider your terminal background">
+    **Dark terminals:** Use bright, saturated colors with higher contrast
+    
+    **Light terminals:** Use darker, muted colors with lower contrast
+  </Accordion>
+  
+  <Accordion title="Test thoroughly">
+    Check your theme with:
+    - Different message types (user, assistant, custom)
+    - All tool states (pending, success, error)
+    - Markdown content (headings, code, quotes)
+    - Long wrapped text
+    - Thinking blocks at different levels
+  </Accordion>
+  
+  <Accordion title="Use hot reload">
+    Select your theme, then edit the JSON file. Changes appear immediately without restarting Pi.
+  </Accordion>
+  
+  <Accordion title="Match your terminal">
+    For best results, use colors that harmonize with your terminal's color scheme.
+  </Accordion>
+</AccordionGroup>
+
+## VS Code Terminal
+
+For accurate colors in VS Code, set:
+
+```json
+{
+  "terminal.integrated.minimumContrastRatio": 1
+}
+```
+
+This disables automatic contrast adjustment that can alter your theme colors.
+
+## Example Themes
+
+See the built-in themes for reference:
+
+<CardGroup cols={2}>
+  <Card title="dark.json" icon="moon" href="https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/modes/interactive/theme/dark.json">
+    Built-in dark theme source
+  </Card>
+  <Card title="light.json" icon="sun" href="https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/modes/interactive/theme/light.json">
+    Built-in light theme source
+  </Card>
+</CardGroup>
+
+## Sharing Themes
+
+Package themes for others:
+
+<Steps>
+  <Step title="Create Package">
+    ```json
+    {
+      "name": "my-themes",
+      "keywords": ["pi-package"],
+      "pi": {
+        "themes": ["./themes"]
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Add Themes">
+    ```
+    my-themes/
+    ├── package.json
+    └── themes/
+        ├── nord.json
+        ├── gruvbox.json
+        └── tokyo-night.json
+    ```
+  </Step>
+  
+  <Step title="Publish">
+    ```bash
+    npm publish
+    ```
+  </Step>
+  
+  <Step title="Users Install">
+    ```bash
+    pi install npm:my-themes
+    ```
+  </Step>
+</Steps>
+
+See [Pi Packages](/coding-agent/pi-packages) for full details.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Colors look washed out">
+    Your terminal may not support 24-bit color. Check `$COLORTERM`:
+    
+    ```bash
+    echo $COLORTERM  # Should output "truecolor" or "24bit"
+    ```
+    
+    If not supported, consider switching to a modern terminal.
+  </Accordion>
+  
+  <Accordion title="Theme not appearing">
+    Ensure:
+    - File is in a discovered location
+    - Filename ends with `.json`
+    - JSON is valid (use the `$schema` for validation)
+    - Theme name is unique
+    - All 51 color tokens are defined
+  </Accordion>
+  
+  <Accordion title="Hot reload not working">
+    Hot reload only works for the **currently active** theme. If you're editing a different theme, select it first via `/settings`.
+  </Accordion>
+  
+  <Accordion title="Validation errors">
+    Use the `$schema` field to enable validation in your editor:
+    
+    ```json
+    {
+      "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Customization" icon="sliders" href="/coding-agent/customization">
+    Explore all customization options
+  </Card>
+  <Card title="Pi Packages" icon="box" href="/coding-agent/pi-packages">
+    Package and share themes via npm or git
+  </Card>
+</CardGroup>

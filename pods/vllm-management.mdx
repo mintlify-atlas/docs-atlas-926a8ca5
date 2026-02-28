@@ -1,0 +1,333 @@
+---
+title: vLLM Pod Management
+description: Deploy and manage LLMs on GPU pods with automatic vLLM configuration
+---
+
+The `@mariozechner/pi-pods` CLI simplifies running large language models on remote GPU pods with automatic vLLM configuration for agentic workloads.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Automatic Setup" icon="wand-magic-sparkles">
+    Sets up vLLM on fresh Ubuntu pods automatically
+  </Card>
+  <Card title="Tool Calling" icon="wrench">
+    Configures tool calling for agentic models
+  </Card>
+  <Card title="Smart GPU Allocation" icon="microchip">
+    Manages multiple models with automatic GPU assignment
+  </Card>
+  <Card title="OpenAI Compatible" icon="plug">
+    Provides OpenAI-compatible API endpoints
+  </Card>
+</CardGroup>
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install -g @mariozechner/pi
+```
+
+```bash npx
+npx @mariozechner/pi --help
+```
+</CodeGroup>
+
+## Quick Start
+
+<Steps>
+  <Step title="Set Environment Variables">
+    ```bash
+    export HF_TOKEN=your_huggingface_token
+    export PI_API_KEY=your_api_key
+    ```
+  </Step>
+
+  <Step title="Setup Pod">
+    ```bash
+    pi pods setup dc1 "ssh root@1.2.3.4" \
+      --mount "sudo mount -t nfs nfs.server:/path /mnt/models"
+    ```
+  </Step>
+
+  <Step title="Start Model">
+    ```bash
+    pi start Qwen/Qwen2.5-Coder-32B-Instruct --name qwen
+    ```
+  </Step>
+
+  <Step title="Test with Agent">
+    ```bash
+    # Single message
+    pi agent qwen "What is the Fibonacci sequence?"
+    
+    # Interactive mode
+    pi agent qwen -i
+    ```
+  </Step>
+</Steps>
+
+## Supported Providers
+
+### DataCrunch (Recommended)
+
+- NFS volumes shareable across pods
+- Models download once, use everywhere
+- Best for teams or multiple experiments
+
+```bash
+pi pods setup dc1 "ssh root@instance.datacrunch.io" \
+  --mount "sudo mount -t nfs -o nconnect=16 nfs.fin-02.datacrunch.io:/pseudo /mnt/models"
+```
+
+### RunPod
+
+- Network volumes with good persistence
+- Cannot share between running pods
+- Good for single-pod workflows
+
+```bash
+pi pods setup runpod "ssh root@pod.runpod.io" --models-path /runpod-volume
+```
+
+### Also Works With
+
+- Vast.ai
+- Prime Intellect
+- AWS EC2 with EFS
+- Any Ubuntu machine with NVIDIA GPUs
+
+## Pod Management
+
+### Setup New Pod
+
+```bash
+pi pods setup <name> "<ssh>" [options]
+  --mount "<mount_command>"    # Run mount command during setup
+  --models-path <path>          # Override extracted path
+  --vllm release|nightly|gpt-oss  # vLLM version
+```
+
+### List and Manage Pods
+
+```bash
+pi pods                  # List all configured pods
+pi pods active <name>    # Switch active pod
+pi pods remove <name>    # Remove pod from config
+pi shell [<name>]        # SSH into pod
+pi ssh [<name>] "<cmd>"  # Run command on pod
+```
+
+## Model Management
+
+### Start Models
+
+```bash
+pi start <model> --name <name> [options]
+  --memory <percent>   # GPU memory: 30%, 50%, 90%
+  --context <size>     # Context: 4k, 8k, 16k, 32k, 64k, 128k
+  --gpus <count>       # Number of GPUs
+  --pod <name>         # Target specific pod
+  --vllm <args...>     # Custom vLLM args
+```
+
+### Manage Running Models
+
+```bash
+pi stop [<name>]    # Stop model (or all)
+pi list             # List running models
+pi logs <name>      # Stream model logs
+```
+
+## Predefined Models
+
+### Qwen Models
+
+```bash
+# Qwen2.5-Coder-32B - Excellent coding model
+pi start Qwen/Qwen2.5-Coder-32B-Instruct --name qwen
+
+# Qwen3-Coder-30B - Advanced reasoning
+pi start Qwen/Qwen3-Coder-30B-A3B-Instruct --name qwen3
+
+# Qwen3-Coder-480B - 8xH200 required
+pi start Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --name qwen-480b
+```
+
+### GPT-OSS Models
+
+```bash
+# Requires special vLLM build
+pi pods setup gpt-pod "ssh root@1.2.3.4" --models-path /workspace --vllm gpt-oss
+
+pi start openai/gpt-oss-20b --name gpt20
+pi start openai/gpt-oss-120b --name gpt120
+```
+
+### GLM Models
+
+```bash
+pi start zai-org/GLM-4.5 --name glm
+pi start zai-org/GLM-4.5-Air --name glm-air
+```
+
+### Custom Models
+
+```bash
+# DeepSeek with custom settings
+pi start deepseek-ai/DeepSeek-V3 --name deepseek --vllm \
+  --tensor-parallel-size 4 --trust-remote-code
+
+# Any model with specific parser
+pi start some/model --name mymodel --vllm \
+  --tool-call-parser hermes --enable-auto-tool-choice
+```
+
+## Multi-GPU Support
+
+### Automatic Assignment
+
+```bash
+pi start model1 --name m1  # Auto-assigns GPU 0
+pi start model2 --name m2  # Auto-assigns GPU 1
+pi start model3 --name m3  # Auto-assigns GPU 2
+```
+
+### Specify GPU Count
+
+```bash
+# Run on 1 GPU instead of all
+pi start Qwen/Qwen2.5-Coder-32B-Instruct --name qwen --gpus 1
+
+# Run on 8 GPUs
+pi start zai-org/GLM-4.5 --name glm --gpus 8
+```
+
+### Tensor Parallelism
+
+```bash
+pi start meta-llama/Llama-3.1-70B-Instruct --name llama70b --vllm \
+  --tensor-parallel-size 4
+```
+
+## Agent Interface
+
+### Single Messages
+
+```bash
+pi agent <name> "<message>"
+pi agent <name> "<msg1>" "<msg2>"  # Multiple messages
+```
+
+### Interactive Mode
+
+```bash
+pi agent <name> -i       # Interactive chat
+pi agent <name> -i -c    # Continue previous session
+```
+
+### Standalone Agent
+
+```bash
+# Works with any OpenAI-compatible API
+pi-agent --base-url http://localhost:8000/v1 --model model-name "Hello"
+pi-agent --api-key sk-... "What is 2+2?"
+pi-agent --json "What is 2+2?"  # JSONL output
+pi-agent -i  # Interactive mode
+```
+
+## API Integration
+
+All models expose OpenAI-compatible endpoints:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://your-pod-ip:8001/v1",
+    api_key="your-pi-api-key"
+)
+
+response = client.chat.completions.create(
+    model="Qwen/Qwen2.5-Coder-32B-Instruct",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+## Memory and Context
+
+### GPU Memory Allocation
+
+- `--memory 30%` - High concurrency, limited context
+- `--memory 50%` - Balanced (default)
+- `--memory 90%` - Maximum context, low concurrency
+
+### Context Window
+
+- `--context 4k` - 4,096 tokens
+- `--context 32k` - 32,768 tokens
+- `--context 128k` - 131,072 tokens
+
+```bash
+pi start Qwen/Qwen2.5-Coder-32B-Instruct --name coder \
+  --context 64k --memory 70%
+```
+
+## Tool Calling
+
+Automatic configuration for known models:
+
+- **Qwen**: `hermes` parser
+- **GLM**: `glm4_moe` parser with reasoning
+- **GPT-OSS**: Uses `/v1/responses` endpoint
+- **Custom**: Specify with `--vllm --tool-call-parser <parser>`
+
+Disable tool calling:
+```bash
+pi start model --name mymodel --vllm --disable-tool-call-parser
+```
+
+## Troubleshooting
+
+### OOM Errors
+
+- Reduce `--memory` percentage
+- Use quantized version (FP8)
+- Reduce `--context` size
+
+### Model Won't Start
+
+```bash
+pi ssh "nvidia-smi"  # Check GPU usage
+pi list              # Check port conflicts
+pi stop              # Force stop all
+```
+
+### Tool Calling Issues
+
+- Try different parser: `--vllm --tool-call-parser mistral`
+- Or disable: `--vllm --disable-tool-call-parser`
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `HF_TOKEN` | HuggingFace token for downloads |
+| `PI_API_KEY` | API key for vLLM endpoints |
+| `PI_CONFIG_DIR` | Config directory (default: `~/.pi`) |
+| `OPENAI_API_KEY` | Used by `pi-agent` |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="DataCrunch Setup" icon="server" href="https://github.com/badlogic/pi-mono/blob/main/packages/pods/README.md#datacrunch-setup">
+    Detailed DataCrunch configuration
+  </Card>
+  <Card title="RunPod Setup" icon="cloud" href="https://github.com/badlogic/pi-mono/blob/main/packages/pods/README.md#runpod-setup">
+    RunPod configuration guide
+  </Card>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/badlogic/pi-mono/tree/main/packages/pods">
+    View source code and examples
+  </Card>
+</CardGroup>

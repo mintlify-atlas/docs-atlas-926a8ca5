@@ -1,0 +1,439 @@
+---
+title: "Installation"
+description: "Install Pi packages for your use case"
+---
+
+## Choose Your Installation
+
+Pi is distributed as multiple npm packages. Install only what you need:
+
+<CardGroup cols={2}>
+  <Card
+    title="Coding Agent CLI"
+    icon="terminal"
+  >
+    Install globally for interactive development
+  </Card>
+  <Card
+    title="Library Packages"
+    icon="box"
+  >
+    Install locally for programmatic usage
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+<Info>
+  Pi requires **Node.js 20.0.0 or higher**. Check your version with `node --version`.
+</Info>
+
+```bash
+node --version  # Should output v20.0.0 or higher
+```
+
+## Coding Agent (Global CLI)
+
+For the full interactive coding agent experience:
+
+```bash
+npm install -g @mariozechner/pi-coding-agent
+```
+
+Verify installation:
+
+```bash
+pi --version
+```
+
+<Accordion title="Platform-Specific Notes">
+  
+  **Windows:** Works best with Windows Terminal. See [Windows setup guide](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/windows.md).
+  
+  **Termux (Android):** Fully supported. See [Termux setup guide](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/termux.md).
+  
+  **Terminal Configuration:** For best experience, see [terminal setup guide](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md).
+
+</Accordion>
+
+## Library Packages
+
+### LLM API Only
+
+For unified LLM access without the agent runtime:
+
+```bash
+npm install @mariozechner/pi-ai
+```
+
+**Includes:**
+- Multi-provider LLM streaming and completion
+- Tool calling with TypeBox validation
+- Automatic model discovery
+- OAuth support
+
+**Use when:** Building custom LLM integrations, need simple completion/streaming API
+
+### Agent Runtime
+
+For building stateful agents with tool execution:
+
+```bash
+npm install @mariozechner/pi-agent-core @mariozechner/pi-ai
+```
+
+**Includes:**
+- Agent state management
+- Event-driven architecture
+- Tool execution loop
+- Message queue and steering
+
+**Use when:** Building custom agents, need event streaming and state management
+
+### Terminal UI
+
+For building terminal-based interfaces:
+
+```bash
+npm install @mariozechner/pi-tui
+```
+
+**Includes:**
+- Differential rendering
+- Built-in components (Editor, Markdown, SelectList, etc.)
+- Overlay system
+- Autocomplete providers
+
+**Use when:** Building CLIs, need terminal UI components
+
+### Web UI
+
+For building browser-based chat interfaces:
+
+```bash
+npm install @mariozechner/pi-web-ui @mariozechner/pi-agent-core @mariozechner/pi-ai
+```
+
+**Peer dependencies:**
+```bash
+npm install @mariozechner/mini-lit lit
+```
+
+**Includes:**
+- Chat panel components
+- Artifact viewer
+- File attachments (PDF, DOCX, XLSX, images)
+- IndexedDB storage
+- CORS proxy handling
+
+**Use when:** Building web apps, browser extensions, need browser-based chat UI
+
+### Slack Bot
+
+For running the coding agent in Slack:
+
+```bash
+npm install @mariozechner/pi-mom
+```
+
+**Includes:**
+- Slack socket mode integration
+- Thread management
+- Agent delegation
+
+**Use when:** Need team collaboration via Slack
+
+### vLLM Pod Management
+
+For managing GPU pods and vLLM deployments:
+
+```bash
+npm install @mariozechner/pi-pods
+```
+
+**Use when:** Self-hosting LLM inference on cloud GPU providers
+
+## Full Development Setup
+
+To work on Pi itself or use all packages:
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```bash
+    git clone https://github.com/badlogic/pi-mono.git
+    cd pi-mono
+    ```
+  </Step>
+  
+  <Step title="Install Dependencies">
+    ```bash
+    npm install
+    ```
+  </Step>
+  
+  <Step title="Build All Packages">
+    ```bash
+    npm run build
+    ```
+  </Step>
+  
+  <Step title="Run Tests">
+    ```bash
+    ./test.sh  # Skips LLM tests without API keys
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  **Development Note:** `npm run check` requires `npm run build` to be run first, as the web-ui package uses TypeScript which needs compiled `.d.ts` files from dependencies.
+</Note>
+
+## API Keys & Authentication
+
+After installation, configure authentication for your LLM provider:
+
+<Tabs>
+  <Tab title="API Keys">
+    Set environment variables for your provider:
+    
+    ```bash
+    # Anthropic
+    export ANTHROPIC_API_KEY=sk-ant-...
+    
+    # OpenAI
+    export OPENAI_API_KEY=sk-...
+    
+    # Google Gemini
+    export GEMINI_API_KEY=...
+    
+    # xAI
+    export XAI_API_KEY=...
+    
+    # Groq
+    export GROQ_API_KEY=...
+    
+    # Cerebras
+    export CEREBRAS_API_KEY=...
+    
+    # Mistral
+    export MISTRAL_API_KEY=...
+    ```
+    
+    See [AI Providers](/ai/providers) for complete list.
+  </Tab>
+  
+  <Tab title="OAuth (Subscriptions)">
+    For subscription-based providers (Claude Pro, ChatGPT Plus, GitHub Copilot):
+    
+    **Coding Agent:**
+    ```bash
+    pi
+    /login  # Interactive provider selection
+    ```
+    
+    **Library (pi-ai):**
+    ```bash
+    npx @mariozechner/pi-ai login
+    npx @mariozechner/pi-ai login anthropic  # Specific provider
+    ```
+    
+    See [OAuth Providers](/ai/oauth) for details.
+  </Tab>
+  
+  <Tab title="Google Vertex AI">
+    Google Vertex AI uses Application Default Credentials:
+    
+    **Local Development:**
+    ```bash
+    gcloud auth application-default login
+    export GOOGLE_CLOUD_PROJECT="my-project"
+    export GOOGLE_CLOUD_LOCATION="us-central1"
+    ```
+    
+    **Production (Service Account):**
+    ```bash
+    export GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
+    export GOOGLE_CLOUD_PROJECT="my-project"
+    export GOOGLE_CLOUD_LOCATION="us-central1"
+    ```
+  </Tab>
+  
+  <Tab title="Azure OpenAI">
+    Azure OpenAI requires resource configuration:
+    
+    ```bash
+    export AZURE_OPENAI_API_KEY=...
+    export AZURE_OPENAI_RESOURCE_NAME=my-resource
+    # OR
+    export AZURE_OPENAI_BASE_URL=https://my-resource.openai.azure.com
+    
+    # Optional: Override API version (defaults to v1)
+    export AZURE_OPENAI_API_VERSION=v1
+    
+    # Optional: Map model IDs to deployment names
+    export AZURE_OPENAI_DEPLOYMENT_NAME_MAP="gpt-4o-mini=my-deployment,gpt-4o=prod"
+    ```
+  </Tab>
+</Tabs>
+
+## Verify Installation
+
+<CodeGroup>
+
+```bash Coding Agent
+# Check version
+pi --version
+
+# List available models (requires API key)
+pi --list-models
+
+# Test with a simple prompt
+pi -p "Hello, who are you?"
+```
+
+```javascript LLM API
+import { getModel, complete } from '@mariozechner/pi-ai';
+
+const model = getModel('anthropic', 'claude-3-5-haiku-20241022');
+
+const response = await complete(model, {
+  messages: [{ role: 'user', content: 'Hello!' }]
+}, {
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+console.log(response.content);
+```
+
+```javascript Agent Runtime
+import { Agent } from '@mariozechner/pi-agent-core';
+import { getModel } from '@mariozechner/pi-ai';
+
+const agent = new Agent({
+  initialState: {
+    systemPrompt: 'You are a helpful assistant.',
+    model: getModel('anthropic', 'claude-3-5-haiku-20241022'),
+    messages: [],
+    tools: []
+  }
+});
+
+agent.subscribe((event) => {
+  if (event.type === 'message_update' && 
+      event.assistantMessageEvent.type === 'text_delta') {
+    process.stdout.write(event.assistantMessageEvent.delta);
+  }
+});
+
+await agent.prompt('Hello!');
+```
+
+</CodeGroup>
+
+## Package Versions
+
+<Info>
+  All Pi packages use **lockstep versioning**. Every release updates all packages together, even if only one package changed. This ensures compatibility across the monorepo.
+</Info>
+
+Current version: **0.55.3** (as of this documentation)
+
+Check for updates:
+```bash
+npm outdated -g @mariozechner/pi-coding-agent  # Global CLI
+npm outdated @mariozechner/pi-ai               # Library packages
+```
+
+Update to latest:
+```bash
+npm update -g @mariozechner/pi-coding-agent    # Global CLI
+npm update @mariozechner/pi-ai                 # Library packages
+```
+
+## Common Installation Issues
+
+<AccordionGroup>
+  <Accordion title="Node version too old">
+    **Error:** `error @mariozechner/pi-coding-agent@0.55.3: The engine "node" is incompatible with this module.`
+    
+    **Solution:** Update Node.js to v20 or higher. Use [nvm](https://github.com/nvm-sh/nvm) for easy version management:
+    ```bash
+    nvm install 20
+    nvm use 20
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission errors on global install">
+    **Error:** `EACCES: permission denied`
+    
+    **Solution:** Use npx instead, or configure npm prefix:
+    ```bash
+    # Option 1: Use npx (no global install needed)
+    npx @mariozechner/pi-coding-agent
+    
+    # Option 2: Configure npm to use user directory
+    mkdir -p ~/.npm-global
+    npm config set prefix ~/.npm-global
+    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+    source ~/.bashrc
+    npm install -g @mariozechner/pi-coding-agent
+    ```
+  </Accordion>
+  
+  <Accordion title="Module not found errors">
+    **Error:** `Cannot find module '@mariozechner/pi-ai'`
+    
+    **Solution:** Ensure dependencies are installed:
+    ```bash
+    # For library usage, install peer dependencies
+    npm install @mariozechner/pi-ai
+    
+    # For web-ui, install peer dependencies
+    npm install @mariozechner/mini-lit lit
+    ```
+  </Accordion>
+  
+  <Accordion title="TypeScript errors in development">
+    **Error:** Type errors when building web-ui
+    
+    **Solution:** Build dependencies first:
+    ```bash
+    npm run build  # From monorepo root
+    ```
+    
+    The web-ui package uses TypeScript and needs compiled `.d.ts` files from dependencies.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start Guide"
+    icon="rocket"
+    href="/quick-start"
+  >
+    Run your first Pi agent in under 5 minutes
+  </Card>
+  <Card
+    title="LLM Providers"
+    icon="plug"
+    href="/ai/providers"
+  >
+    Configure your preferred LLM provider
+  </Card>
+  <Card
+    title="Coding Agent Guide"
+    icon="terminal"
+    href="/coding-agent/overview"
+  >
+    Learn the interactive coding agent
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api/ai/stream"
+  >
+    Explore the programmatic API
+  </Card>
+</CardGroup>

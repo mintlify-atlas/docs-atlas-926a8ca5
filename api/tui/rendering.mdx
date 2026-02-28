@@ -1,0 +1,396 @@
+---
+title: Rendering API
+description: TUI rendering system and utilities
+---
+
+The `@mariozechner/pi-tui` package provides a differential rendering system and utilities for terminal output.
+
+## Import
+
+```typescript
+import {
+  TUI,
+  type Component,
+  type Terminal,
+  ProcessTerminal,
+} from "@mariozechner/pi-tui";
+```
+
+## TUI Class
+
+Main rendering engine that manages the screen buffer and input.
+
+### Constructor
+
+```typescript
+const tui = new TUI(terminal: Terminal)
+```
+
+<ParamField path="terminal" type="Terminal" required>
+  Terminal interface (use `ProcessTerminal` for stdio)
+</ParamField>
+
+### Methods
+
+#### render
+
+Render a component to the terminal.
+
+```typescript
+tui.render(component: Component): void
+```
+
+Uses differential rendering - only redraws changed lines.
+
+#### showOverlay
+
+Show an overlay component.
+
+```typescript
+tui.showOverlay(
+  component: Component,
+  options?: OverlayOptions
+): OverlayHandle
+```
+
+<ParamField path="component" type="Component" required>
+  Component to show as overlay
+</ParamField>
+
+<ParamField path="options" type="OverlayOptions">
+  <Expandable title="properties">
+    <ParamField path="anchor" type="OverlayAnchor">
+      Position anchor. Default: `'center'`
+    </ParamField>
+    
+    <ParamField path="width" type="number | string">
+      Width (number or percentage like `'50%'`)
+    </ParamField>
+    
+    <ParamField path="maxHeight" type="number | string">
+      Max height (number or percentage)
+    </ParamField>
+    
+    <ParamField path="offsetX" type="number">
+      Horizontal offset from anchor
+    </ParamField>
+    
+    <ParamField path="offsetY" type="number">
+      Vertical offset from anchor
+    </ParamField>
+    
+    <ParamField path="margin" type="number | OverlayMargin">
+      Margin from terminal edges
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Anchor Positions:**
+- `'center'` - Center of screen
+- `'top-left'`, `'top-center'`, `'top-right'`
+- `'bottom-left'`, `'bottom-center'`, `'bottom-right'`
+- `'left-center'`, `'right-center'`
+
+#### hideOverlay
+
+Hide an overlay.
+
+```typescript
+tui.hideOverlay(handle: OverlayHandle): void
+```
+
+#### focus
+
+Focus a component (for keyboard input).
+
+```typescript
+tui.focus(component: Component & Focusable): void
+```
+
+#### addInputListener
+
+Add a global input listener.
+
+```typescript
+tui.addInputListener(
+  listener: (data: string) => { consume?: boolean; data?: string } | undefined
+): void
+```
+
+Return `{ consume: true }` to prevent other listeners from receiving the input.
+
+#### close
+
+Clean up and restore terminal.
+
+```typescript
+tui.close(): void
+```
+
+## Component Interface
+
+All components must implement this interface:
+
+```typescript
+interface Component {
+  render(width: number): string[];
+  handleInput?(data: string): void;
+  wantsKeyRelease?: boolean;
+  invalidate(): void;
+}
+```
+
+<ParamField path="render" type="function" required>
+  Render the component to an array of strings (one per line)
+</ParamField>
+
+<ParamField path="handleInput" type="function">
+  Handle keyboard input when focused
+</ParamField>
+
+<ParamField path="wantsKeyRelease" type="boolean">
+  Whether component wants key release events. Default: `false`
+</ParamField>
+
+<ParamField path="invalidate" type="function" required>
+  Invalidate cached render state (called on theme changes)
+</ParamField>
+
+### Example: Custom Component
+
+```typescript
+import type { Component } from "@mariozechner/pi-tui";
+
+class HelloComponent implements Component {
+  private name: string;
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  render(width: number): string[] {
+    return [`Hello, ${this.name}!`];
+  }
+
+  handleInput(data: string): void {
+    if (data === "\r") {
+      console.log("Enter pressed!");
+    }
+  }
+
+  invalidate(): void {
+    // No cached state to invalidate
+  }
+}
+```
+
+## Focusable Interface
+
+Components that accept keyboard input should implement `Focusable`:
+
+```typescript
+interface Focusable {
+  focused: boolean;
+}
+```
+
+When focused, the component should emit `CURSOR_MARKER` at the cursor position:
+
+```typescript
+import { CURSOR_MARKER } from "@mariozechner/pi-tui";
+
+class MyInput implements Component, Focusable {
+  focused = false;
+  private text = "";
+  private cursor = 0;
+
+  render(width: number): string[] {
+    if (this.focused) {
+      // Insert cursor marker
+      const before = this.text.slice(0, this.cursor);
+      const after = this.text.slice(this.cursor);
+      return [before + CURSOR_MARKER + after];
+    }
+    return [this.text];
+  }
+
+  // ... rest of implementation
+}
+```
+
+## Terminal Interface
+
+The `Terminal` interface abstracts terminal operations:
+
+```typescript
+interface Terminal {
+  write(data: string): void;
+  getSize(): { rows: number; cols: number };
+  setRawMode(enabled: boolean): void;
+  onData(callback: (data: string) => void): void;
+  onResize(callback: () => void): void;
+  clear(): void;
+}
+```
+
+### ProcessTerminal
+
+Default implementation for Node.js stdio:
+
+```typescript
+import { ProcessTerminal } from "@mariozechner/pi-tui";
+
+const terminal = new ProcessTerminal();
+const tui = new TUI(terminal);
+```
+
+## Rendering Utilities
+
+### visibleWidth
+
+Calculate visible width of text (handles ANSI codes and Unicode).
+
+```typescript
+import { visibleWidth } from "@mariozechner/pi-tui";
+
+const width = visibleWidth("\x1b[31mRed text\x1b[0m");
+// = 8 (ANSI codes not counted)
+```
+
+### truncateToWidth
+
+Truncate text to fit width.
+
+```typescript
+import { truncateToWidth } from "@mariozechner/pi-tui";
+
+const truncated = truncateToWidth("Very long text...", 10, "...");
+// = "Very lo..."
+```
+
+### wrapTextWithAnsi
+
+Wrap text preserving ANSI codes.
+
+```typescript
+import { wrapTextWithAnsi } from "@mariozechner/pi-tui";
+
+const lines = wrapTextWithAnsi("Long \x1b[31mcolored\x1b[0m text", 10);
+// = ["Long \x1b[31mcolor\x1b[0m", "\x1b[31med\x1b[0m text"]
+```
+
+## Image Support
+
+### renderImage
+
+Render an image using terminal image protocols.
+
+```typescript
+import { renderImage } from "@mariozechner/pi-tui";
+
+const lines = await renderImage({
+  data: base64Data,
+  mimeType: "image/png",
+  maxWidth: 80,
+  maxHeight: 24,
+});
+```
+
+Supports iTerm2 and Kitty image protocols with automatic fallback.
+
+### detectCapabilities
+
+Detect terminal capabilities.
+
+```typescript
+import { detectCapabilities } from "@mariozechner/pi-tui";
+
+const caps = await detectCapabilities();
+console.log(caps.imageProtocol); // 'kitty' | 'iterm2' | null
+console.log(caps.colorDepth);    // 24 | 256 | 16
+```
+
+## Performance
+
+### Differential Rendering
+
+TUI uses differential rendering to minimize terminal writes:
+
+1. Component renders to string array
+2. TUI compares with previous frame
+3. Only changed lines are redrawn
+4. Cursor positioned efficiently
+
+### Render Caching
+
+Components can cache render output:
+
+```typescript
+class CachedComponent implements Component {
+  private cache: string[] | null = null;
+
+  render(width: number): string[] {
+    if (this.cache) return this.cache;
+    
+    this.cache = this.computeRender(width);
+    return this.cache;
+  }
+
+  invalidate(): void {
+    this.cache = null;
+  }
+
+  private computeRender(width: number): string[] {
+    // Expensive rendering logic
+    return ["..."]
+  }
+}
+```
+
+## Example: Full Application
+
+```typescript
+import {
+  TUI,
+  ProcessTerminal,
+  Container,
+  Box,
+  Text,
+  Editor,
+} from "@mariozechner/pi-tui";
+
+const terminal = new ProcessTerminal();
+const tui = new TUI(terminal);
+
+// Build UI
+const root = new Container();
+
+const header = new Box({ title: "Chat" });
+header.addChild(new Text("Welcome to the chat!"));
+root.addChild(header);
+
+const editor = new Editor({ placeholder: "Type a message..." });
+root.addChild(editor);
+
+// Handle input
+editor.on("submit", () => {
+  const message = editor.getText();
+  console.log(`Sent: ${message}`);
+  editor.clear();
+});
+
+// Render
+tui.render(root);
+tui.focus(editor);
+
+// Handle resize
+terminal.onResize(() => {
+  tui.render(root);
+});
+
+// Cleanup
+process.on("SIGINT", () => {
+  tui.close();
+  process.exit(0);
+});
+```

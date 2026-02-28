@@ -1,0 +1,423 @@
+---
+title: 'LLM Providers'
+description: 'Complete guide to all 15+ supported LLM providers with authentication and configuration'
+---
+
+# LLM Providers
+
+The library supports 15+ LLM providers with unified authentication and configuration. All providers work through the same API surface.
+
+## Supported Providers
+
+### API Key Providers
+
+These providers use static API keys for authentication:
+
+<AccordionGroup>
+  <Accordion title="OpenAI" icon="openai">
+    **Models**: GPT-4o, GPT-4o-mini, o1-preview, o1-mini, o3-mini
+    
+    **API**: `openai-responses` (Responses API)
+    
+    **Features**: Vision, reasoning, tool calling
+    
+    **Setup**:
+    ```bash
+    export OPENAI_API_KEY="sk-..."
+    ```
+    
+    ```typescript
+    import { getModel, complete } from '@mariozechner/pi-ai';
+    
+    const model = getModel('openai', 'gpt-4o-mini');
+    const response = await complete(model, context);
+    ```
+  </Accordion>
+
+  <Accordion title="Anthropic" icon="robot">
+    **Models**: Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude Sonnet 4
+    
+    **API**: `anthropic-messages` (Messages API)
+    
+    **Features**: Vision, thinking (Sonnet 4), tool calling, prompt caching
+    
+    **Setup**:
+    ```bash
+    export ANTHROPIC_API_KEY="sk-ant-..."
+    ```
+    
+    For Claude Pro/Max subscribers, use OAuth (see OAuth section).
+  </Accordion>
+
+  <Accordion title="Google" icon="google">
+    **Models**: Gemini 1.5 Pro, Gemini 1.5 Flash, Gemini 2.0 Flash, Gemini 2.5 Flash
+    
+    **API**: `google-generative-ai` (Generative AI API)
+    
+    **Features**: Vision, thinking, tool calling
+    
+    **Setup**:
+    ```bash
+    export GEMINI_API_KEY="..."
+    ```
+    
+    Note: Google provider does not support function call streaming. You receive a single `toolcall_delta` event with complete arguments.
+  </Accordion>
+
+  <Accordion title="xAI (Grok)" icon="x">
+    **Models**: Grok Beta, Grok Code Fast, Grok Vision Beta
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Features**: Vision, reasoning, tool calling
+    
+    **Setup**:
+    ```bash
+    export XAI_API_KEY="xai-..."
+    ```
+  </Accordion>
+
+  <Accordion title="Groq" icon="bolt">
+    **Models**: Llama 3.3 70B, Llama 3.1 70B, Mixtral 8x7B, GPT-OSS models
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Features**: Extremely fast inference, tool calling
+    
+    **Setup**:
+    ```bash
+    export GROQ_API_KEY="gsk_..."
+    ```
+  </Accordion>
+
+  <Accordion title="Cerebras" icon="microchip">
+    **Models**: Llama 3.3 70B, Llama 3.1 70B, GPT-OSS models
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Features**: Fast inference, tool calling
+    
+    **Setup**:
+    ```bash
+    export CEREBRAS_API_KEY="csk-..."
+    ```
+  </Accordion>
+
+  <Accordion title="Mistral" icon="wind">
+    **Models**: Mistral Large, Mistral Small, Codestral, Pixtral
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Features**: Vision (Pixtral), tool calling
+    
+    **Setup**:
+    ```bash
+    export MISTRAL_API_KEY="..."
+    ```
+    
+    Note: Mistral requires tool call IDs to be exactly 9 alphanumeric characters. The library handles this automatically.
+  </Accordion>
+
+  <Accordion title="OpenRouter" icon="route">
+    **Models**: Access to 100+ models from multiple providers
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Features**: Multi-provider routing, fallback support
+    
+    **Setup**:
+    ```bash
+    export OPENROUTER_API_KEY="sk-or-..."
+    ```
+    
+    ```typescript
+    const model = getModel('openrouter', 'anthropic/claude-3.5-sonnet');
+    
+    // Control provider routing
+    const response = await complete(model, context, {
+      compat: {
+        openRouterRouting: {
+          only: ['anthropic', 'openai'],
+          order: ['anthropic', 'openai']
+        }
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Amazon Bedrock" icon="aws">
+    **Models**: Claude models via AWS Bedrock
+    
+    **API**: `bedrock-converse-stream` (Bedrock Converse API)
+    
+    **Features**: Vision, tool calling, AWS authentication
+    
+    **Setup**: Uses AWS SDK credentials (IAM roles, profiles, or environment variables)
+    
+    ```typescript
+    import { getModel, complete } from '@mariozechner/pi-ai';
+    
+    const model = getModel('amazon-bedrock', 'anthropic.claude-3-5-sonnet-20241022-v2:0');
+    const response = await complete(model, context);
+    ```
+  </Accordion>
+
+  <Accordion title="MiniMax" icon="m">
+    **Models**: MiniMax models (Chinese provider)
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Setup**:
+    ```bash
+    export MINIMAX_API_KEY="..."
+    ```
+  </Accordion>
+
+  <Accordion title="Kimi For Coding" icon="code">
+    **Models**: Moonshot AI models with Anthropic-compatible API
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Setup**:
+    ```bash
+    export KIMI_API_KEY="..."
+    ```
+  </Accordion>
+
+  <Accordion title="Vercel AI Gateway" icon="triangle">
+    **Models**: Multi-provider gateway with caching and analytics
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Setup**:
+    ```bash
+    export AI_GATEWAY_API_KEY="..."
+    ```
+  </Accordion>
+
+  <Accordion title="Azure OpenAI" icon="microsoft">
+    **Models**: GPT-4o, GPT-4o-mini via Azure
+    
+    **API**: `azure-openai-responses` (Responses API)
+    
+    **Setup**:
+    ```bash
+    export AZURE_OPENAI_API_KEY="..."
+    export AZURE_OPENAI_BASE_URL="https://your-resource.openai.azure.com"
+    # Or use resource name (constructs URL automatically)
+    export AZURE_OPENAI_RESOURCE_NAME="your-resource"
+    
+    # Optional: Override deployment names
+    export AZURE_OPENAI_DEPLOYMENT_NAME_MAP="gpt-4o-mini=my-deployment,gpt-4o=prod"
+    # Optional: API version (defaults to v1)
+    export AZURE_OPENAI_API_VERSION="v1"
+    ```
+    
+    ```typescript
+    const model = getModel('azure-openai-responses', 'gpt-4o-mini');
+    // Or override deployment name in options
+    const response = await complete(model, context, {
+      azureDeploymentName: 'my-custom-deployment'
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### OAuth Providers
+
+These providers require OAuth authentication:
+
+<AccordionGroup>
+  <Accordion title="OpenAI Codex" icon="openai">
+    **Models**: GPT-5 Mini, GPT-5 Nano, GPT-5.1 Omni (ChatGPT Plus/Pro subscription)
+    
+    **API**: `openai-codex-responses` (Codex Responses API)
+    
+    **Features**: Extended reasoning, session-based caching, WebSocket support
+    
+    **Setup**: See [OAuth Authentication](/ai/oauth#openai-codex)
+  </Accordion>
+
+  <Accordion title="GitHub Copilot" icon="github">
+    **Models**: GPT-4o, Claude 3.5 Sonnet (Copilot subscription)
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Setup**: See [OAuth Authentication](/ai/oauth#github-copilot)
+    
+    Note: If you get "model not supported" error, enable the model in VS Code Copilot Chat settings first.
+  </Accordion>
+
+  <Accordion title="Google Gemini CLI" icon="google">
+    **Models**: Gemini 2.0 Flash, Gemini 2.5 Flash (via Cloud Code Assist)
+    
+    **API**: `google-gemini-cli` (Cloud Code Assist API)
+    
+    **Features**: Free tier or paid subscription, thinking support
+    
+    **Setup**: See [OAuth Authentication](/ai/oauth#google-gemini-cli)
+  </Accordion>
+
+  <Accordion title="Antigravity" icon="google">
+    **Models**: Free Gemini 3, Claude, GPT-OSS models (via Google Cloud)
+    
+    **API**: `openai-completions` (OpenAI-compatible)
+    
+    **Setup**: See [OAuth Authentication](/ai/oauth#antigravity)
+  </Accordion>
+
+  <Accordion title="Vertex AI" icon="google">
+    **Models**: Gemini models via Google Cloud Vertex AI
+    
+    **API**: `google-vertex` (Vertex AI API)
+    
+    **Setup**: Uses Application Default Credentials (ADC)
+    
+    ```bash
+    # Local development
+    gcloud auth application-default login
+    export GOOGLE_CLOUD_PROJECT="my-project"
+    export GOOGLE_CLOUD_LOCATION="us-central1"
+    
+    # Production (service account)
+    export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+    ```
+    
+    See [OAuth Authentication](/ai/oauth#vertex-ai) for details.
+  </Accordion>
+</AccordionGroup>
+
+## Environment Variables
+
+In Node.js, API keys can be set via environment variables:
+
+| Provider | Environment Variable |
+|----------|---------------------|
+| OpenAI | `OPENAI_API_KEY` |
+| Azure OpenAI | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_RESOURCE_NAME` |
+| Anthropic | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` |
+| Google | `GEMINI_API_KEY` |
+| Vertex AI | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (+ ADC) |
+| Mistral | `MISTRAL_API_KEY` |
+| Groq | `GROQ_API_KEY` |
+| Cerebras | `CEREBRAS_API_KEY` |
+| xAI | `XAI_API_KEY` |
+| OpenRouter | `OPENROUTER_API_KEY` |
+| Vercel AI Gateway | `AI_GATEWAY_API_KEY` |
+| MiniMax | `MINIMAX_API_KEY` |
+| Kimi | `KIMI_API_KEY` |
+| GitHub Copilot | `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` |
+
+## Checking API Keys
+
+```typescript
+import { getEnvApiKey } from '@mariozechner/pi-ai';
+
+const key = getEnvApiKey('openai');
+if (key) {
+  console.log('OpenAI API key is set');
+}
+```
+
+## Browser Usage
+
+In browsers, you must pass API keys explicitly:
+
+```typescript
+const response = await complete(model, context, {
+  apiKey: 'your-api-key'
+});
+```
+
+<Warning>
+Exposing API keys in frontend code is dangerous. Use a backend proxy for production applications.
+</Warning>
+
+## Custom Models
+
+Create custom models for local inference servers:
+
+```typescript
+import { Model, stream } from '@mariozechner/pi-ai';
+
+// Ollama example
+const ollamaModel: Model<'openai-completions'> = {
+  id: 'llama-3.1-8b',
+  name: 'Llama 3.1 8B (Ollama)',
+  api: 'openai-completions',
+  provider: 'ollama',
+  baseUrl: 'http://localhost:11434/v1',
+  reasoning: false,
+  input: ['text'],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 128000,
+  maxTokens: 32000
+};
+
+const response = await stream(ollamaModel, context, {
+  apiKey: 'dummy' // Ollama doesn't need a real key
+});
+```
+
+### OpenAI Compatibility Settings
+
+For OpenAI-compatible providers, you can override compatibility settings:
+
+```typescript
+const customModel: Model<'openai-completions'> = {
+  id: 'custom-model',
+  name: 'Custom Model',
+  api: 'openai-completions',
+  provider: 'custom',
+  baseUrl: 'http://localhost:8000/v1',
+  reasoning: false,
+  input: ['text'],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 8192,
+  maxTokens: 4096,
+  compat: {
+    supportsStore: false,
+    supportsDeveloperRole: false,
+    maxTokensField: 'max_tokens',
+    supportsUsageInStreaming: false
+  }
+};
+```
+
+Available compatibility flags:
+- `supportsStore` - Whether provider supports the `store` field
+- `supportsDeveloperRole` - Whether provider supports `developer` role vs `system`
+- `supportsReasoningEffort` - Whether provider supports `reasoning_effort`
+- `supportsUsageInStreaming` - Whether provider supports token usage in streaming
+- `maxTokensField` - Use `max_completion_tokens` or `max_tokens`
+- `requiresToolResultName` - Whether tool results need the `name` field
+- `requiresAssistantAfterToolResult` - Whether assistant message is required after tool results
+- `requiresThinkingAsText` - Whether thinking blocks must be text with `<thinking>` tags
+- `requiresMistralToolIds` - Whether tool IDs must be Mistral format (9 alphanumeric chars)
+- `thinkingFormat` - Reasoning param format: `openai`, `zai`, or `qwen`
+- `supportsStrictMode` - Whether provider supports `strict` in tool definitions
+
+## Provider APIs
+
+The library uses different APIs for different providers:
+
+- `openai-completions` - OpenAI Chat Completions API (xAI, Groq, Cerebras, Mistral, OpenRouter, etc.)
+- `openai-responses` - OpenAI Responses API (OpenAI)
+- `openai-codex-responses` - OpenAI Codex Responses API (OpenAI Codex)
+- `azure-openai-responses` - Azure OpenAI Responses API (Azure)
+- `anthropic-messages` - Anthropic Messages API (Anthropic)
+- `google-generative-ai` - Google Generative AI API (Google)
+- `google-gemini-cli` - Google Cloud Code Assist API (Google Gemini CLI)
+- `google-vertex` - Google Vertex AI API (Vertex AI)
+- `bedrock-converse-stream` - Amazon Bedrock Converse API (Bedrock)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="OAuth Setup" icon="lock" href="/ai/oauth">
+    Configure OAuth for subscription providers
+  </Card>
+  <Card title="Streaming" icon="wave-pulse" href="/ai/streaming">
+    Learn about streaming events and responses
+  </Card>
+</CardGroup>

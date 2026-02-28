@@ -1,0 +1,484 @@
+---
+title: "Skills"
+description: "Agent Skills standard support - on-demand capability packages with workflows and documentation"
+---
+
+<Note>
+Pi can create skills for you. Just ask it to build one for your use case.
+</Note>
+
+Skills are self-contained capability packages that the agent loads on-demand. A skill provides specialized workflows, setup instructions, helper scripts, and reference documentation for specific tasks.
+
+Pi implements the [Agent Skills standard](https://agentskills.io/specification), warning about violations but remaining lenient.
+
+## How Skills Work
+
+<Steps>
+  <Step title="Discovery">
+    At startup, Pi scans skill locations and extracts names and descriptions
+  </Step>
+  
+  <Step title="System Prompt">
+    Available skills are included in the system prompt in XML format per the [specification](https://agentskills.io/integrate-skills)
+  </Step>
+  
+  <Step title="On-Demand Loading">
+    When a task matches, the agent uses `read` to load the full SKILL.md
+    
+    (Models don't always do this automatically - use prompting or `/skill:name` to force it)
+  </Step>
+  
+  <Step title="Execution">
+    The agent follows the instructions, using relative paths to reference scripts and assets
+  </Step>
+</Steps>
+
+This is **progressive disclosure**: only descriptions are always in context, full instructions load on-demand.
+
+## Skill Locations
+
+<Warning>
+Skills can instruct the model to perform any action and may include executable code. Review skill content before use.
+</Warning>
+
+Pi loads skills from:
+
+**Global:**
+- `~/.pi/agent/skills/`
+- `~/.agents/skills/`
+
+**Project:**
+- `.pi/skills/`
+- `.agents/skills/` in `cwd` and ancestor directories (up to git repo root)
+
+**Packages:**
+- `skills/` directories in pi packages
+- `pi.skills` entries in `package.json`
+
+**Settings:**
+- `skills` array with files or directories
+
+**CLI:**
+- `--skill <path>` (repeatable, additive even with `--no-skills`)
+
+### Discovery Rules
+
+- Direct `.md` files in the skills directory root
+- Recursive `SKILL.md` files under subdirectories
+
+Disable discovery with `--no-skills` (explicit `--skill` paths still load).
+
+### Using Skills from Other Harnesses
+
+To use skills from Claude Code or OpenAI Codex, add their directories:
+
+```json
+{
+  "skills": [
+    "~/.claude/skills",
+    "~/.codex/skills"
+  ]
+}
+```
+
+For project-level Claude Code skills:
+
+```json
+{
+  "skills": ["../.claude/skills"]
+}
+```
+
+## Skill Commands
+
+Skills register as `/skill:name` commands:
+
+```bash
+/skill:brave-search           # Load and execute the skill
+/skill:pdf-tools extract      # Load skill with arguments
+```
+
+Arguments after the command are appended to the skill content as `User: <args>`.
+
+**Toggle skill commands:**
+
+<Tabs>
+  <Tab title="Interactive">
+    Use `/settings` to toggle skill commands
+  </Tab>
+  
+  <Tab title="settings.json">
+    ```json
+    {
+      "enableSkillCommands": true
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Skill Structure
+
+A skill is a directory with a `SKILL.md` file. Everything else is freeform.
+
+```
+my-skill/
+├── SKILL.md              # Required: frontmatter + instructions
+├── scripts/              # Helper scripts
+│   └── process.sh
+├── references/           # Detailed docs loaded on-demand
+│   └── api-reference.md
+└── assets/
+    └── template.json
+```
+
+## SKILL.md Format
+
+```markdown
+---
+name: my-skill
+description: What this skill does and when to use it. Be specific.
+---
+
+# My Skill
+
+## Setup
+
+Run once before first use:
+\`\`\`bash
+cd /path/to/skill && npm install
+\`\`\`
+
+## Usage
+
+\`\`\`bash
+./scripts/process.sh <input>
+\`\`\`
+```
+
+**Use relative paths** from the skill directory:
+
+```markdown
+See [the reference guide](references/REFERENCE.md) for details.
+```
+
+## Frontmatter
+
+Per the [Agent Skills specification](https://agentskills.io/specification#frontmatter-required):
+
+<ParamField path="name" type="string" required>
+  Max 64 chars. Lowercase a-z, 0-9, hyphens. Must match parent directory.
+  
+  **Valid:** `pdf-processing`, `data-analysis`, `code-review`
+  
+  **Invalid:** `PDF-Processing`, `-pdf`, `pdf--processing`
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Max 1024 chars. What the skill does and when to use it.
+  
+  **Be specific** - this determines when the agent loads the skill.
+</ParamField>
+
+<ParamField path="license" type="string">
+  License name or reference to bundled file
+</ParamField>
+
+<ParamField path="compatibility" type="string">
+  Max 500 chars. Environment requirements
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  Arbitrary key-value mapping
+</ParamField>
+
+<ParamField path="allowed-tools" type="string">
+  Space-delimited list of pre-approved tools (experimental)
+</ParamField>
+
+<ParamField path="disable-model-invocation" type="boolean">
+  When `true`, skill is hidden from system prompt. Users must use `/skill:name`
+</ParamField>
+
+### Name Rules
+
+- 1-64 characters
+- Lowercase letters, numbers, hyphens only
+- No leading/trailing hyphens
+- No consecutive hyphens
+- Must match parent directory name
+
+### Description Best Practices
+
+The description determines when the agent loads the skill. **Be specific.**
+
+<CodeGroup>
+```markdown Good
+---
+description: Extracts text and tables from PDF files, fills PDF forms, and merges multiple PDFs. Use when working with PDF documents.
+---
+```
+
+```markdown Poor
+---
+description: Helps with PDFs.
+---
+```
+</CodeGroup>
+
+## Validation
+
+Pi validates skills against the Agent Skills standard. Most issues produce warnings but still load the skill:
+
+- Name doesn't match parent directory
+- Name exceeds 64 characters or contains invalid characters
+- Name starts/ends with hyphen or has consecutive hyphens
+- Description exceeds 1024 characters
+
+Unknown frontmatter fields are ignored.
+
+**Exception:** Skills with missing description are not loaded.
+
+Name collisions (same name from different locations) warn and keep the first skill found.
+
+## Example Skill
+
+Complete example: `brave-search/`
+
+```
+brave-search/
+├── SKILL.md
+├── search.js
+└── content.js
+```
+
+**SKILL.md:**
+
+```markdown
+---
+name: brave-search
+description: Web search and content extraction via Brave Search API. Use for searching documentation, facts, or any web content.
+---
+
+# Brave Search
+
+## Setup
+
+\`\`\`bash
+cd /path/to/brave-search && npm install
+\`\`\`
+
+## Search
+
+\`\`\`bash
+./search.js "query"              # Basic search
+./search.js "query" --content    # Include page content
+\`\`\`
+
+## Extract Page Content
+
+\`\`\`bash
+./content.js https://example.com
+\`\`\`
+```
+
+The agent can now:
+1. Read the skill when needed
+2. Run setup if required
+3. Execute searches using the documented commands
+4. Reference the scripts with relative paths
+
+## Skill Repositories
+
+Public skill repositories:
+
+<CardGroup cols={2}>
+  <Card title="Anthropic Skills" icon="github" href="https://github.com/anthropics/skills">
+    Document processing (docx, pdf, pptx, xlsx), web development
+  </Card>
+  <Card title="Pi Skills" icon="github" href="https://github.com/badlogic/pi-skills">
+    Web search, browser automation, Google APIs, transcription
+  </Card>
+</CardGroup>
+
+## Installing Skills
+
+<Tabs>
+  <Tab title="Via Packages">
+    Install skill packages via npm or git:
+    
+    ```bash
+    pi install npm:pi-skills
+    pi install git:github.com/badlogic/pi-skills
+    ```
+    
+    See [Pi Packages](/coding-agent/pi-packages) for details.
+  </Tab>
+  
+  <Tab title="Manual">
+    Clone or copy skills to a skills directory:
+    
+    ```bash
+    git clone https://github.com/badlogic/pi-skills ~/.pi/agent/skills/pi-skills
+    ```
+  </Tab>
+  
+  <Tab title="Via Settings">
+    Point to external skill directories:
+    
+    ```json
+    {
+      "skills": [
+        "~/shared-skills",
+        "../team-skills"
+      ]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Creating Skills
+
+<Steps>
+  <Step title="Create Directory">
+    ```bash
+    mkdir -p ~/.pi/agent/skills/my-skill
+    cd ~/.pi/agent/skills/my-skill
+    ```
+  </Step>
+  
+  <Step title="Write SKILL.md">
+    ```markdown
+    ---
+    name: my-skill
+    description: Your skill description
+    ---
+    
+    # My Skill
+    
+    Instructions here...
+    ```
+  </Step>
+  
+  <Step title="Add Scripts">
+    ```bash
+    mkdir scripts
+    echo '#!/bin/bash\necho "Hello"' > scripts/hello.sh
+    chmod +x scripts/hello.sh
+    ```
+  </Step>
+  
+  <Step title="Test">
+    ```bash
+    pi
+    /skill:my-skill
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Write clear descriptions">
+    The description is the most important part. It tells the agent when to use the skill.
+    
+    Include:
+    - What the skill does
+    - When to use it
+    - What problems it solves
+    
+    Avoid:
+    - Vague descriptions
+    - Generic terms
+    - Missing use cases
+  </Accordion>
+  
+  <Accordion title="Document setup clearly">
+    If the skill requires setup (npm install, API keys, etc.), document it clearly in a Setup section.
+    
+    The agent should be able to:
+    - Detect if setup is needed
+    - Run setup commands
+    - Verify setup succeeded
+  </Accordion>
+  
+  <Accordion title="Use relative paths">
+    Always use paths relative to the skill directory:
+    
+    ```markdown
+    ./scripts/process.sh
+    [Reference](references/api.md)
+    ```
+    
+    This ensures the skill works regardless of where it's installed.
+  </Accordion>
+  
+  <Accordion title="Include examples">
+    Show concrete examples of how to use the skill:
+    
+    ```markdown
+    ## Example
+    
+    Search for Node.js documentation:
+    \`\`\`bash
+    ./search.js "node.js async/await"
+    \`\`\`
+    ```
+  </Accordion>
+  
+  <Accordion title="Provide reference docs">
+    For complex skills, include detailed reference documentation that the agent can load on-demand:
+    
+    ```
+    my-skill/
+    ├── SKILL.md          # Quick start
+    └── references/
+        ├── API.md        # Detailed API docs
+        └── EXAMPLES.md   # More examples
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Sharing Skills
+
+Package skills for others to use:
+
+<Steps>
+  <Step title="Create package.json">
+    ```json
+    {
+      "name": "my-skills",
+      "keywords": ["pi-package", "agent-skills"],
+      "pi": {
+        "skills": ["./skills"]
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Publish">
+    ```bash
+    npm publish
+    ```
+    
+    Or push to GitHub for git-based installation.
+  </Step>
+  
+  <Step title="Users Install">
+    ```bash
+    pi install npm:my-skills
+    ```
+  </Step>
+</Steps>
+
+See [Pi Packages](/coding-agent/pi-packages) for full packaging details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Extensions" icon="puzzle-piece" href="/coding-agent/extensions">
+    Build TypeScript extensions for more complex integrations
+  </Card>
+  <Card title="Pi Packages" icon="box" href="/coding-agent/pi-packages">
+    Package and share skills via npm or git
+  </Card>
+</CardGroup>

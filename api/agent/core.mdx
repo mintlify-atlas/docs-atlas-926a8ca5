@@ -1,0 +1,336 @@
+---
+title: Agent Core
+description: Core agent runtime for building agentic applications
+---
+
+The `@mariozechner/pi-agent-core` package provides the core agent runtime with tool execution, message handling, and state management.
+
+## Import
+
+```typescript
+import { Agent, agentLoop, agentLoopContinue } from "@mariozechner/pi-agent-core";
+```
+
+## Agent Class
+
+The `Agent` class manages conversation state, tool execution, and LLM interactions.
+
+### Constructor
+
+```typescript
+new Agent(options?: AgentOptions)
+```
+
+<ParamField path="options" type="AgentOptions">
+  <Expandable title="properties">
+    <ParamField path="initialState" type="Partial<AgentState>">
+      Initial state (system prompt, model, tools, etc.)
+    </ParamField>
+    
+    <ParamField path="convertToLlm" type="function">
+      Convert `AgentMessage[]` to `Message[]` for LLM. Default filters to user/assistant/toolResult.
+    </ParamField>
+    
+    <ParamField path="transformContext" type="function">
+      Transform context before LLM call (for pruning, injection, etc.)
+    </ParamField>
+    
+    <ParamField path="steeringMode" type="'all' | 'one-at-a-time'">
+      How to send steering messages. Default: `'all'`
+    </ParamField>
+    
+    <ParamField path="followUpMode" type="'all' | 'one-at-a-time'">
+      How to send follow-up messages. Default: `'all'`
+    </ParamField>
+    
+    <ParamField path="streamFn" type="StreamFn">
+      Custom stream function (for proxies). Default: `streamSimple`
+    </ParamField>
+    
+    <ParamField path="sessionId" type="string">
+      Session identifier for caching
+    </ParamField>
+    
+    <ParamField path="getApiKey" type="function">
+      Dynamically resolve API key for each call
+    </ParamField>
+    
+    <ParamField path="thinkingBudgets" type="ThinkingBudgets">
+      Custom token budgets for thinking levels
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Properties
+
+<ResponseField name="state" type="AgentState">
+  Current agent state (read-only)
+</ResponseField>
+
+### Methods
+
+#### prompt
+
+Send a user message and run the agent.
+
+```typescript
+prompt(content: string | Content[], signal?: AbortSignal): EventStream<AgentEvent, AgentMessage[]>
+```
+
+<ParamField path="content" type="string | Content[]" required>
+  User message content
+</ParamField>
+
+<ParamField path="signal" type="AbortSignal">
+  Abort signal for cancellation
+</ParamField>
+
+Returns an event stream that emits agent events and resolves to new messages.
+
+#### continue
+
+Continue the agent from current state (for retries).
+
+```typescript
+continue(signal?: AbortSignal): EventStream<AgentEvent, AgentMessage[]>
+```
+
+#### updateState
+
+Update agent state.
+
+```typescript
+updateState(update: Partial<AgentState>): void
+```
+
+<ParamField path="update" type="Partial<AgentState>" required>
+  State fields to update
+</ParamField>
+
+### Example
+
+```typescript
+import { Agent } from "@mariozechner/pi-agent-core";
+import { getModel } from "@mariozechner/pi-ai";
+
+const agent = new Agent({
+  initialState: {
+    systemPrompt: "You are a helpful assistant.",
+    model: getModel("anthropic", "claude-4.5-sonnet-20250514"),
+    thinkingLevel: "medium",
+    tools: [],
+    messages: [],
+  },
+});
+
+// Send a message
+const stream = agent.prompt("What is 2+2?");
+
+// Subscribe to events
+stream.on("message_end", (event) => {
+  console.log("Message:", event.message);
+});
+
+// Await result
+const newMessages = await stream.result();
+console.log("Response:", newMessages);
+```
+
+## Agent Loop Functions
+
+Lower-level functions for custom agent implementations.
+
+### agentLoop
+
+Start an agent loop with new user message(s).
+
+```typescript
+agentLoop(
+  prompts: AgentMessage[],
+  context: AgentContext,
+  config: AgentLoopConfig,
+  signal?: AbortSignal,
+  streamFn?: StreamFn
+): EventStream<AgentEvent, AgentMessage[]>
+```
+
+<ParamField path="prompts" type="AgentMessage[]" required>
+  User messages to add to context
+</ParamField>
+
+<ParamField path="context" type="AgentContext" required>
+  Current conversation context
+  
+  <Expandable title="properties">
+    <ParamField path="systemPrompt" type="string" required>
+      System prompt
+    </ParamField>
+    
+    <ParamField path="messages" type="AgentMessage[]" required>
+      Conversation messages
+    </ParamField>
+    
+    <ParamField path="tools" type="AgentTool[]" required>
+      Available tools
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="config" type="AgentLoopConfig" required>
+  Loop configuration (model, convertToLlm, etc.)
+</ParamField>
+
+### agentLoopContinue
+
+Continue an agent loop from current context.
+
+```typescript
+agentLoopContinue(
+  context: AgentContext,
+  config: AgentLoopConfig,
+  signal?: AbortSignal,
+  streamFn?: StreamFn
+): EventStream<AgentEvent, AgentMessage[]>
+```
+
+Used for retries when the last message is a user message or tool result.
+
+## Agent State
+
+The agent's current state.
+
+```typescript
+interface AgentState {
+  systemPrompt: string;
+  model: Model<any>;
+  thinkingLevel: ThinkingLevel;
+  tools: AgentTool<any>[];
+  messages: AgentMessage[];
+  isStreaming: boolean;
+  streamMessage: AgentMessage | null;
+  pendingToolCalls: Set<string>;
+  error?: string;
+}
+```
+
+<ResponseField name="systemPrompt" type="string">
+  System prompt defining agent behavior
+</ResponseField>
+
+<ResponseField name="model" type="Model">
+  Current LLM model
+</ResponseField>
+
+<ResponseField name="thinkingLevel" type="ThinkingLevel">
+  Reasoning intensity level
+</ResponseField>
+
+<ResponseField name="tools" type="AgentTool[]">
+  Available tools
+</ResponseField>
+
+<ResponseField name="messages" type="AgentMessage[]">
+  Conversation history
+</ResponseField>
+
+<ResponseField name="isStreaming" type="boolean">
+  Whether agent is currently streaming
+</ResponseField>
+
+<ResponseField name="streamMessage" type="AgentMessage | null">
+  Current streaming message (if any)
+</ResponseField>
+
+<ResponseField name="pendingToolCalls" type="Set<string>">
+  Tool call IDs awaiting execution
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Last error message (if any)
+</ResponseField>
+
+## Agent Tool
+
+Tool definition for the agent.
+
+```typescript
+interface AgentTool<TSchema extends TSchema = any> {
+  name: string;
+  description: string;
+  parameters: TSchema;
+  execute: (
+    toolCallId: string,
+    args: Static<TSchema>,
+    signal?: AbortSignal,
+    updateCallback?: AgentToolUpdateCallback
+  ) => Promise<AgentToolResult<any>>;
+}
+```
+
+<ParamField path="name" type="string" required>
+  Unique tool name
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Description for the LLM
+</ParamField>
+
+<ParamField path="parameters" type="TSchema" required>
+  TypeBox schema for parameters
+</ParamField>
+
+<ParamField path="execute" type="function" required>
+  Execute the tool and return result
+</ParamField>
+
+### AgentToolResult
+
+```typescript
+interface AgentToolResult<T> {
+  content: (TextContent | ImageContent)[];
+  details: T;
+}
+```
+
+<ResponseField name="content" type="Content[]">
+  Content to send to LLM
+</ResponseField>
+
+<ResponseField name="details" type="T">
+  Metadata for UI/logging (not sent to LLM)
+</ResponseField>
+
+## Events
+
+The agent emits events during execution:
+
+- `agent_start` - Agent turn begins
+- `agent_end` - Agent turn completes
+- `turn_start` - Turn starts
+- `turn_end` - Turn ends
+- `message_start` - Message added to context
+- `message_update` - Streaming message delta
+- `message_end` - Message complete
+- `tool_execution_start` - Tool execution begins
+- `tool_execution_update` - Tool execution progress
+- `tool_execution_end` - Tool execution completes
+
+### Example
+
+```typescript
+const stream = agent.prompt("Hello");
+
+stream.on("message_update", (event) => {
+  if (event.message.role === "assistant") {
+    console.log("Assistant:", event.message.content);
+  }
+});
+
+stream.on("tool_execution_start", (event) => {
+  console.log(`Executing tool: ${event.toolName}`);
+});
+
+stream.on("agent_end", (event) => {
+  console.log("Agent finished");
+});
+```

@@ -1,0 +1,335 @@
+---
+title: Creating Agent Skills
+description: Build self-contained capability packages with specialized workflows and reference documentation
+---
+
+Skills are self-contained capability packages that the agent loads on-demand. A skill provides specialized workflows, setup instructions, helper scripts, and reference documentation for specific tasks.
+
+Pi implements the [Agent Skills standard](https://agentskills.io/specification), ensuring compatibility with other agent harnesses like Claude Code and OpenAI Codex.
+
+## Quick Start
+
+<Steps>
+
+### Create Skill Directory
+
+```bash
+mkdir -p ~/.pi/agent/skills/my-skill
+cd ~/.pi/agent/skills/my-skill
+```
+
+### Write SKILL.md
+
+Create `SKILL.md` with YAML frontmatter:
+
+```markdown
+---
+name: my-skill
+description: Brief description of what this skill does and when to use it. Be specific.
+---
+
+# My Skill
+
+## Setup
+
+Run once before first use:
+
+```bash
+cd ~/.pi/agent/skills/my-skill && npm install
+```
+
+## Usage
+
+```bash
+./scripts/process.sh <input>
+```
+
+See [the reference guide](references/REFERENCE.md) for details.
+```
+
+### Test the Skill
+
+```bash
+pi
+```
+
+The skill appears in the system prompt automatically. Use `/skill:my-skill` to load it explicitly.
+
+</Steps>
+
+## How Skills Work
+
+1. At startup, Pi scans skill locations and extracts names and descriptions
+2. The system prompt includes available skills in XML format
+3. When a task matches, the agent uses the `read` tool to load the full SKILL.md
+4. The agent follows the instructions, using relative paths to reference scripts and assets
+
+This is **progressive disclosure**: only descriptions are always in context, full instructions load on-demand.
+
+## Skill Structure
+
+A complete skill directory:
+
+```
+my-skill/
+├── SKILL.md              # Required: frontmatter + instructions
+├── scripts/              # Helper scripts
+│   └── process.sh
+├── references/           # Detailed docs loaded on-demand
+│   └── api-reference.md
+└── assets/
+    └── template.json
+```
+
+### SKILL.md Format
+
+The only required file. Must include:
+
+1. **YAML frontmatter** with `name` and `description`
+2. **Markdown content** with instructions
+
+```markdown
+---
+name: my-skill
+description: What this skill does and when to use it. Be specific.
+---
+
+# My Skill
+
+Instructions for the agent go here.
+```
+
+## Frontmatter Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Max 64 chars. Lowercase a-z, 0-9, hyphens. Must match parent directory. |
+| `description` | Yes | Max 1024 chars. What the skill does and when to use it. |
+| `license` | No | License name or reference to bundled file. |
+| `compatibility` | No | Max 500 chars. Environment requirements. |
+| `metadata` | No | Arbitrary key-value mapping. |
+| `allowed-tools` | No | Space-delimited list of pre-approved tools (experimental). |
+| `disable-model-invocation` | No | When `true`, skill is hidden from system prompt. Users must use `/skill:name`. |
+
+### Name Rules
+
+- 1-64 characters
+- Lowercase letters, numbers, hyphens only
+- No leading/trailing hyphens
+- No consecutive hyphens
+- Must match parent directory name
+
+**Valid:** `pdf-processing`, `data-analysis`, `code-review`
+
+**Invalid:** `PDF-Processing`, `-pdf`, `pdf--processing`
+
+### Description Best Practices
+
+The description determines when the agent loads the skill. Be specific.
+
+<Tabs>
+  <Tab title="Good">
+    ```yaml
+    description: Extracts text and tables from PDF files, fills PDF forms, and merges multiple PDFs. Use when working with PDF documents.
+    ```
+  </Tab>
+  <Tab title="Poor">
+    ```yaml
+    description: Helps with PDFs.
+    ```
+  </Tab>
+</Tabs>
+
+## Complete Example
+
+<Steps>
+
+### Create Directory Structure
+
+```bash
+mkdir -p ~/.pi/agent/skills/brave-search
+cd ~/.pi/agent/skills/brave-search
+```
+
+### Add Scripts
+
+Create `search.js`:
+
+```javascript
+#!/usr/bin/env node
+const query = process.argv[2];
+const includeContent = process.argv.includes('--content');
+
+// Search implementation
+const results = await searchBrave(query, { includeContent });
+console.log(JSON.stringify(results, null, 2));
+```
+
+Make it executable:
+
+```bash
+chmod +x search.js
+```
+
+### Write SKILL.md
+
+```markdown
+---
+name: brave-search
+description: Web search and content extraction via Brave Search API. Use for searching documentation, facts, or any web content.
+---
+
+# Brave Search
+
+## Setup
+
+```bash
+cd ~/.pi/agent/skills/brave-search && npm install
+export BRAVE_API_KEY=your-key
+```
+
+## Search
+
+```bash
+./search.js "query"              # Basic search
+./search.js "query" --content    # Include page content
+```
+
+## Extract Page Content
+
+```bash
+./content.js https://example.com
+```
+```
+
+### Test It
+
+```bash
+pi
+```
+
+Then ask:
+
+```
+Search for "TypeScript best practices"
+```
+
+</Steps>
+
+## Skill Locations
+
+Pi loads skills from:
+
+- **Global:**
+  - `~/.pi/agent/skills/`
+  - `~/.agents/skills/`
+- **Project:**
+  - `.pi/skills/`
+  - `.agents/skills/` in `cwd` and ancestor directories (up to git repo root)
+- **Packages:** `skills/` directories or `pi.skills` entries in `package.json`
+- **Settings:** `skills` array with files or directories
+- **CLI:** `--skill <path>` (repeatable)
+
+### Using Skills from Other Harnesses
+
+To use skills from Claude Code or OpenAI Codex, add to `~/.pi/agent/settings.json`:
+
+```json
+{
+  "skills": [
+    "~/.claude/skills",
+    "~/.codex/skills"
+  ]
+}
+```
+
+For project-level Claude Code skills, add to `.pi/settings.json`:
+
+```json
+{
+  "skills": ["../.claude/skills"]
+}
+```
+
+## Skill Commands
+
+Skills register as `/skill:name` commands:
+
+```bash
+/skill:brave-search           # Load and execute
+/skill:pdf-tools extract      # Load with arguments
+```
+
+Arguments after the command are appended to the skill content as `User: <args>`.
+
+Toggle via `/settings` or in `settings.json`:
+
+```json
+{
+  "enableSkillCommands": true
+}
+```
+
+## Relative Paths
+
+Use relative paths from the skill directory:
+
+```markdown
+See [the reference guide](references/REFERENCE.md) for details.
+
+Run the setup script:
+
+```bash
+./scripts/setup.sh
+```
+```
+
+Pi resolves these paths relative to the skill's base directory.
+
+## Validation
+
+Pi validates skills against the Agent Skills standard:
+
+- Name doesn't match parent directory → Warning
+- Name exceeds 64 characters → Warning
+- Name contains invalid characters → Warning
+- Description exceeds 1024 characters → Warning
+- Missing description → Skill not loaded
+
+Name collisions (same name from different locations) warn and keep the first skill found.
+
+## Dynamic Skills from Extensions
+
+Extensions can provide skills dynamically:
+
+```typescript
+import type { ExtensionAPI, Skill } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  const skill: Skill = {
+    name: "dynamic-skill",
+    description: "Skill provided by extension",
+    content: "# Dynamic Skill\n\nInstructions here.",
+    source: "extension",
+  };
+
+  pi.on("resources_discover", async (event) => {
+    return {
+      skills: [skill],
+    };
+  });
+}
+```
+
+See `packages/coding-agent/examples/extensions/dynamic-resources/` for a complete example.
+
+## Skill Repositories
+
+- [Anthropic Skills](https://github.com/anthropics/skills) - Document processing (docx, pdf, pptx, xlsx), web development
+- [Pi Skills](https://github.com/badlogic/pi-skills) - Web search, browser automation, Google APIs, transcription
+
+## Next Steps
+
+- See [Building Extensions](/guides/building-extensions) for custom tools and event handlers
+- See [Custom Providers](/guides/custom-providers) for adding LLM providers
+- Browse existing skills for inspiration

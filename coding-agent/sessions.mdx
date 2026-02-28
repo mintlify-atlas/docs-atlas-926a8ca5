@@ -1,0 +1,518 @@
+---
+title: "Sessions"
+description: "Session management, branching, tree navigation, and automatic compaction in Pi"
+---
+
+Sessions in Pi are stored as JSONL (JSON Lines) files with a tree structure. Each entry has an `id` and `parentId`, enabling in-place branching without creating new files.
+
+## Session Storage
+
+Sessions auto-save to:
+
+```
+~/.pi/agent/sessions/--<path>--/<timestamp>_<uuid>.jsonl
+```
+
+Where `<path>` is your working directory with `/` replaced by `-`.
+
+**Example:**
+```
+~/.pi/agent/sessions/--home-user-projects-myapp--/
+  ├── 20260228_143022_abc123.jsonl
+  ├── 20260228_150145_def456.jsonl
+  └── 20260228_162030_ghi789.jsonl
+```
+
+## Session Commands
+
+<Tabs>
+  <Tab title="CLI Flags">
+    ```bash
+    # Continue most recent session
+    pi -c
+    
+    # Browse and select from past sessions
+    pi -r
+    
+    # Ephemeral mode (don't save)
+    pi --no-session
+    
+    # Use specific session file or UUID
+    pi --session <path>
+    pi --session abc123
+    
+    # Custom session storage directory
+    pi --session-dir ~/my-sessions
+    ```
+  </Tab>
+  
+  <Tab title="Interactive Commands">
+    ```bash
+    # Start a new session
+    /new
+    
+    # Browse and switch sessions
+    /resume
+    
+    # Set display name
+    /name "Refactor auth module"
+    
+    # Show session info
+    /session
+    
+    # Navigate session tree
+    /tree
+    
+    # Fork from current point
+    /fork
+    ```
+  </Tab>
+</Tabs>
+
+## Session Naming
+
+Set a display name to identify sessions:
+
+```bash
+/name "Fix login bug"
+```
+
+Named sessions appear in the session selector with their name instead of the first message. This makes it easier to find specific work.
+
+**Via extensions:**
+```typescript
+pi.setSessionName("Feature: User profiles");
+const name = pi.getSessionName();
+```
+
+## Branching
+
+Sessions use a tree structure where you can branch from any point in the conversation.
+
+### Tree Navigation (`/tree`)
+
+Navigate the full conversation tree and switch between branches:
+
+<Steps>
+  <Step title="Open Tree View">
+    ```bash
+    /tree
+    ```
+    or press **Escape** twice
+  </Step>
+  
+  <Step title="Search and Filter">
+    - **Type** to search messages
+    - **←/→** to page through results
+    - **Ctrl+O** to cycle filter modes:
+      - Default (user + assistant + tools)
+      - No-tools (user + assistant only)
+      - User-only
+      - Labeled-only
+      - All (includes compaction, fork entries)
+  </Step>
+  
+  <Step title="Navigate">
+    - **↑/↓** to select an entry
+    - **Enter** to continue from that point
+    - **l** to label entries as bookmarks
+  </Step>
+</Steps>
+
+**Example tree view:**
+```
+┌─ Session Tree ─────────────────────────┐
+│ ● User: Add login form                 │
+│   └─ Assistant: Created form component │
+│ ● User: Use TypeScript              │  ← Branch A
+│   └─ Assistant: Converted to TS     │
+│ ● User: Actually use JavaScript     │  ← Branch B (current)
+│   └─ Assistant: Reverted to JS      │
+└─────────────────────────────────────┘
+```
+
+When you select a different point:
+- All history is preserved in the file
+- Context switches to that branch
+- Continue the conversation from there
+- Create new branches without limits
+
+### Forking (`/fork`)
+
+Create a new session file from the current branch:
+
+<Steps>
+  <Step title="Run Fork Command">
+    ```bash
+    /fork
+    ```
+  </Step>
+  
+  <Step title="Select Point">
+    Opens the tree selector. Choose the entry to fork from.
+  </Step>
+  
+  <Step title="Edit Message">
+    The selected message appears in the editor for modification before continuing.
+  </Step>
+  
+  <Step title="New File Created">
+    A new `.jsonl` file is created with history up to that point.
+  </Step>
+</Steps>
+
+**Use cases:**
+- Experiment with different approaches
+- Create a clean session from a checkpoint
+- Share a conversation up to a certain point
+- Start fresh but keep relevant context
+
+### Labeling Entries
+
+Mark important points in the conversation:
+
+```bash
+# In tree view, press 'l' on an entry
+```
+
+Labels are user-defined bookmarks that:
+- Appear in tree view for easy navigation
+- Persist across sessions
+- Help you find checkpoints
+- Can be filtered with "labeled-only" mode
+
+**Via extensions:**
+```typescript
+// Set a label
+pi.setLabel(entryId, "checkpoint-before-refactor");
+
+// Clear a label
+pi.setLabel(entryId, undefined);
+
+// Read labels
+const label = ctx.sessionManager.getLabel(entryId);
+```
+
+## Compaction
+
+Long sessions exhaust context windows. Compaction summarizes older messages while keeping recent ones.
+
+### Manual Compaction
+
+Trigger compaction manually:
+
+```bash
+# Use default summarization
+/compact
+
+# With custom instructions
+/compact Focus on security decisions and API changes
+```
+
+The compaction:
+1. Sends conversation history to the LLM
+2. Receives a summary
+3. Replaces old messages with the summary
+4. Keeps recent messages unchanged
+
+### Automatic Compaction
+
+**Enabled by default.** Triggers in two scenarios:
+
+<Tabs>
+  <Tab title="Context Overflow">
+    When the prompt exceeds the model's context window:
+    
+    1. Request fails with context error
+    2. Pi automatically compacts
+    3. Retries the request
+    4. User sees a notification
+    
+    This is a **recovery mechanism** - transparent to the user.
+  </Tab>
+  
+  <Tab title="Proactive">
+    When approaching the context limit:
+    
+    1. Pi detects high context usage
+    2. Compacts before the next turn
+    3. Prevents overflow errors
+    4. User sees a notification
+    
+    This is **preventive** - keeps sessions healthy.
+  </Tab>
+</Tabs>
+
+### Configuration
+
+Configure via `/settings` or `settings.json`:
+
+```json
+{
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,      // Tokens reserved for LLM response
+    "keepRecentTokens": 20000    // Recent tokens to keep (not summarized)
+  }
+}
+```
+
+**Settings explained:**
+
+- `enabled` - Enable/disable automatic compaction
+- `reserveTokens` - Space reserved for the model's response (default: 16384)
+- `keepRecentTokens` - How many recent tokens to preserve verbatim (default: 20000)
+
+### Compaction Behavior
+
+<AccordionGroup>
+  <Accordion title="What gets summarized?">
+    Messages older than `keepRecentTokens` are sent to the model for summarization. The model produces a concise summary covering:
+    
+    - Key decisions made
+    - Problems encountered and solutions
+    - Important context about the codebase
+    - State of the work at that point
+    
+    Recent messages remain unchanged to preserve immediate context.
+  </Accordion>
+  
+  <Accordion title="Is the full history lost?">
+    No. The full JSONL file retains all entries. Use `/tree` to navigate back to any point and see the original messages.
+    
+    Compaction only affects what's sent to the LLM in future turns.
+  </Accordion>
+  
+  <Accordion title="Can I customize summarization?">
+    Yes, via extensions:
+    
+    ```typescript
+    pi.on("session_before_compact", async (event, ctx) => {
+      return {
+        compaction: {
+          summary: "Your custom summary...",
+          firstKeptEntryId: event.preparation.firstKeptEntryId,
+          tokensBefore: event.preparation.tokensBefore,
+        }
+      };
+    });
+    ```
+    
+    This lets you implement custom summarization logic or use a different model.
+  </Accordion>
+  
+  <Accordion title="What about branch summaries?">
+    When switching branches via `/tree`, Pi can optionally summarize the abandoned branch. This creates a compact record of what you tried before switching directions.
+    
+    Configure in `settings.json`:
+    ```json
+    {
+      "branchSummary": {
+        "reserveTokens": 16384
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Compaction Events
+
+Extensions can hook into compaction:
+
+```typescript
+// Before compaction - can cancel or customize
+pi.on("session_before_compact", async (event, ctx) => {
+  // Cancel compaction
+  return { cancel: true };
+  
+  // OR provide custom summary
+  return {
+    compaction: {
+      summary: myCustomSummary,
+      firstKeptEntryId: event.preparation.firstKeptEntryId,
+      tokensBefore: event.preparation.tokensBefore,
+    }
+  };
+});
+
+// After compaction
+pi.on("session_compact", async (event, ctx) => {
+  // event.compactionEntry - the saved compaction
+  // event.fromExtension - whether extension provided it
+});
+```
+
+## Session File Format
+
+Sessions are JSONL files where each line is a JSON object.
+
+### Entry Types
+
+<Tabs>
+  <Tab title="Header">
+    ```json
+    {
+      "type": "header",
+      "version": 3,
+      "workingDirectory": "/path/to/project"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Message">
+    ```json
+    {
+      "type": "message",
+      "id": "msg_abc",
+      "parentId": "msg_xyz",
+      "message": {
+        "role": "user",
+        "content": [{ "type": "text", "text": "Hello" }],
+        "timestamp": 1709136000000
+      }
+    }
+    ```
+    
+    Roles: `user`, `assistant`, `toolResult`, `custom`
+  </Tab>
+  
+  <Tab title="Custom">
+    ```json
+    {
+      "type": "custom",
+      "id": "cst_abc",
+      "parentId": "msg_xyz",
+      "customType": "my-extension",
+      "data": { "key": "value" }
+    }
+    ```
+    
+    Used by extensions to persist state.
+  </Tab>
+  
+  <Tab title="Compaction">
+    ```json
+    {
+      "type": "compaction",
+      "id": "cmp_abc",
+      "parentId": "msg_xyz",
+      "summary": "Summary text...",
+      "details": {},
+      "firstKeptEntryId": "msg_def",
+      "tokensBefore": 50000,
+      "tokensAfter": 5000
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Tree Structure
+
+Entries link via `id` and `parentId`:
+
+```
+header (no parent)
+  └─ msg_1 (parent: header)
+      ├─ msg_2 (parent: msg_1)  ← Branch A
+      │   └─ msg_3
+      └─ msg_4 (parent: msg_1)  ← Branch B
+          └─ msg_5
+```
+
+The session tracks the current "leaf" - the last entry in the active branch.
+
+## Deleting Sessions
+
+Delete sessions by:
+
+1. **Removing files:**
+   ```bash
+   rm ~/.pi/agent/sessions/--path--/*.jsonl
+   ```
+
+2. **Interactive deletion:**
+   - Use `/resume` to open the session selector
+   - Select a session
+   - Press **Ctrl+D**
+   - Confirm deletion
+   
+   When available, Pi uses the `trash` CLI to avoid permanent deletion.
+
+## Session Manager API
+
+Extensions can access session data:
+
+```typescript
+pi.on("session_start", async (_event, ctx) => {
+  // Get all entries
+  const entries = ctx.sessionManager.getEntries();
+  
+  // Get current branch
+  const branch = ctx.sessionManager.getBranch();
+  
+  // Get current leaf
+  const leafId = ctx.sessionManager.getLeafId();
+  
+  // Get session file path
+  const file = ctx.sessionManager.getSessionFile();
+  
+  // Get/set labels
+  const label = ctx.sessionManager.getLabel(entryId);
+  pi.setLabel(entryId, "checkpoint");
+});
+```
+
+See the source at `packages/coding-agent/src/core/session-manager.ts` for the full API.
+
+## Migration
+
+Old session formats are automatically migrated:
+
+- **Version 1** (legacy linear): Migrated to tree structure
+- **Version 2** (tree structure): Migrated to version 3
+- **Version 3** (current): Renamed `hookMessage` role to `custom`
+
+Migration happens transparently when loading a session.
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Descriptive Names" icon="tag">
+    Set session names with `/name` to identify work later:
+    ```bash
+    /name "Feature: OAuth login"
+    ```
+  </Card>
+  
+  <Card title="Label Checkpoints" icon="bookmark">
+    Use labels to mark important points:
+    - Before major refactors
+    - After completing features
+    - At decision points
+  </Card>
+  
+  <Card title="Branch Freely" icon="code-branch">
+    Don't hesitate to try different approaches:
+    - Use `/tree` to experiment
+    - Keep the original branch
+    - Compare results
+  </Card>
+  
+  <Card title="Let Auto-Compaction Work" icon="compress">
+    Keep automatic compaction enabled:
+    - Prevents context overflow
+    - Maintains performance
+    - Full history remains accessible
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Customization" icon="sliders" href="/coding-agent/customization">
+    Configure session settings and behavior
+  </Card>
+  <Card title="Extensions" icon="puzzle-piece" href="/coding-agent/extensions">
+    Build extensions that hook into session events
+  </Card>
+</CardGroup>

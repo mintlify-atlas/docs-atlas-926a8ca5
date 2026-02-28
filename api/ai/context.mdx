@@ -1,0 +1,366 @@
+---
+title: Context & Messages
+description: Message types and context structure for LLM conversations
+---
+
+The `@mariozechner/pi-ai` package defines message types and context structures for LLM conversations.
+
+## Import
+
+```typescript
+import type {
+  Context,
+  Message,
+  UserMessage,
+  AssistantMessage,
+  ToolResultMessage,
+} from "@mariozechner/pi-ai";
+```
+
+## Context
+
+The conversation context passed to `stream()` and `complete()` functions.
+
+```typescript
+interface Context {
+  systemPrompt: string;
+  messages: Message[];
+  tools?: Tool[];
+}
+```
+
+<ParamField path="systemPrompt" type="string" required>
+  System prompt that defines the agent's behavior and capabilities
+</ParamField>
+
+<ParamField path="messages" type="Message[]" required>
+  Conversation history (user, assistant, and tool result messages)
+</ParamField>
+
+<ParamField path="tools" type="Tool[]">
+  Available tools the model can invoke
+</ParamField>
+
+### Example
+
+```typescript
+const context: Context = {
+  systemPrompt: "You are a helpful coding assistant.",
+  messages: [
+    {
+      role: "user",
+      content: "Write a function to reverse a string",
+      timestamp: Date.now(),
+    },
+  ],
+  tools: [
+    {
+      type: "function",
+      function: {
+        name: "execute_code",
+        description: "Execute code",
+        parameters: {
+          type: "object",
+          properties: {
+            code: { type: "string" },
+          },
+        },
+      },
+    },
+  ],
+};
+```
+
+## Message Types
+
+### UserMessage
+
+A message from the user.
+
+```typescript
+interface UserMessage {
+  role: "user";
+  content: string | Content[];
+  timestamp: number;
+}
+```
+
+<ParamField path="role" type="'user'" required>
+  Message role
+</ParamField>
+
+<ParamField path="content" type="string | Content[]" required>
+  Message content (text or mixed content)
+</ParamField>
+
+<ParamField path="timestamp" type="number" required>
+  Timestamp in milliseconds since epoch
+</ParamField>
+
+#### Example
+
+```typescript
+const userMessage: UserMessage = {
+  role: "user",
+  content: "What's in this image?",
+  timestamp: Date.now(),
+};
+
+// With image attachment
+const userMessageWithImage: UserMessage = {
+  role: "user",
+  content: [
+    { type: "text", text: "What's in this image?" },
+    { type: "image", data: base64ImageData, mimeType: "image/png" },
+  ],
+  timestamp: Date.now(),
+};
+```
+
+### AssistantMessage
+
+A message from the AI assistant.
+
+```typescript
+interface AssistantMessage {
+  role: "assistant";
+  content: Content[];
+  usage?: Usage;
+  timestamp: number;
+  stopReason?: string;
+}
+```
+
+<ParamField path="role" type="'assistant'" required>
+  Message role
+</ParamField>
+
+<ParamField path="content" type="Content[]" required>
+  Message content (text, thinking, tool calls)
+</ParamField>
+
+<ParamField path="usage" type="Usage">
+  Token usage statistics
+</ParamField>
+
+<ParamField path="timestamp" type="number" required>
+  Timestamp in milliseconds since epoch
+</ParamField>
+
+<ParamField path="stopReason" type="string">
+  Why generation stopped ("stop", "length", "tool_use", etc.)
+</ParamField>
+
+#### Example
+
+```typescript
+const assistantMessage: AssistantMessage = {
+  role: "assistant",
+  content: [
+    { type: "text", text: "Here's a reverse function:" },
+    { type: "text", text: "```typescript\nfunction reverse(s: string) {\n  return s.split('').reverse().join('');\n}\n```" },
+  ],
+  usage: {
+    input: 150,
+    output: 50,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: { input: 0.00045, output: 0.00075, cacheRead: 0, cacheWrite: 0, total: 0.0012 },
+  },
+  timestamp: Date.now(),
+  stopReason: "stop",
+};
+```
+
+### ToolResultMessage
+
+The result of a tool execution.
+
+```typescript
+interface ToolResultMessage {
+  role: "toolResult";
+  toolCallId: string;
+  toolName: string;
+  content: Content[];
+  timestamp: number;
+  isError?: boolean;
+}
+```
+
+<ParamField path="role" type="'toolResult'" required>
+  Message role
+</ParamField>
+
+<ParamField path="toolCallId" type="string" required>
+  ID of the tool call this result corresponds to
+</ParamField>
+
+<ParamField path="toolName" type="string" required>
+  Name of the tool that was executed
+</ParamField>
+
+<ParamField path="content" type="Content[]" required>
+  Tool result content
+</ParamField>
+
+<ParamField path="timestamp" type="number" required>
+  Timestamp in milliseconds since epoch
+</ParamField>
+
+<ParamField path="isError" type="boolean">
+  Whether the tool execution failed
+</ParamField>
+
+#### Example
+
+```typescript
+const toolResult: ToolResultMessage = {
+  role: "toolResult",
+  toolCallId: "call_123",
+  toolName: "execute_code",
+  content: [
+    { type: "text", text: "Output: hello\nExit code: 0" },
+  ],
+  timestamp: Date.now(),
+  isError: false,
+};
+```
+
+## Content Types
+
+### TextContent
+
+Plain text content.
+
+```typescript
+interface TextContent {
+  type: "text";
+  text: string;
+  textSignature?: string;
+}
+```
+
+### ThinkingContent
+
+Reasoning/thinking content (for extended thinking models).
+
+```typescript
+interface ThinkingContent {
+  type: "thinking";
+  thinking: string;
+  thinkingSignature?: string;
+  redacted?: boolean;
+}
+```
+
+<ParamField path="redacted" type="boolean">
+  Whether the thinking was redacted by safety filters
+</ParamField>
+
+### ImageContent
+
+Image attachment.
+
+```typescript
+interface ImageContent {
+  type: "image";
+  data: string;      // base64 encoded
+  mimeType: string;  // e.g., "image/jpeg", "image/png"
+}
+```
+
+### ToolCall
+
+Tool invocation request.
+
+```typescript
+interface ToolCall {
+  type: "toolCall";
+  id: string;
+  name: string;
+  arguments: Record<string, any>;
+  thoughtSignature?: string;
+}
+```
+
+## Usage
+
+Token usage statistics.
+
+```typescript
+interface Usage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    total: number;
+  };
+}
+```
+
+<ResponseField name="input" type="number">
+  Input tokens consumed
+</ResponseField>
+
+<ResponseField name="output" type="number">
+  Output tokens generated
+</ResponseField>
+
+<ResponseField name="cacheRead" type="number">
+  Tokens read from cache
+</ResponseField>
+
+<ResponseField name="cacheWrite" type="number">
+  Tokens written to cache
+</ResponseField>
+
+<ResponseField name="cost" type="object">
+  Cost breakdown in USD
+</ResponseField>
+
+## Tool Definition
+
+Tool definitions use JSON Schema format:
+
+```typescript
+interface Tool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: JSONSchema;
+  };
+}
+```
+
+### Example
+
+```typescript
+const tool: Tool = {
+  type: "function",
+  function: {
+    name: "get_weather",
+    description: "Get the current weather for a location",
+    parameters: {
+      type: "object",
+      properties: {
+        location: {
+          type: "string",
+          description: "City name (e.g., 'San Francisco')",
+        },
+        unit: {
+          type: "string",
+          enum: ["celsius", "fahrenheit"],
+          description: "Temperature unit",
+        },
+      },
+      required: ["location"],
+    },
+  },
+};
+```

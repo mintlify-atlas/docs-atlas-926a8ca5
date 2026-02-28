@@ -1,0 +1,218 @@
+---
+title: "Pi AI Agent Toolkit"
+description: "Build powerful AI agents with a unified LLM API, agent runtime, and interactive terminal UI"
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="Pi AI Agent Toolkit"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="Pi AI Agent Toolkit"
+/>
+
+## Welcome to Pi
+
+Pi is a comprehensive toolkit for building AI agents with full control over your workflows. From a flagship interactive coding agent CLI to low-level APIs for custom implementations, Pi gives you the building blocks to create intelligent, tool-using applications.
+
+**Key Philosophy:** Aggressively extensible. Features that other tools bake in can be built with extensions, skills, or installed from third-party packages. This keeps the core minimal while letting you shape Pi to fit how you work.
+
+## What's Included
+
+Pi is a monorepo containing seven packages, each solving a specific problem in the AI agent stack:
+
+<CardGroup cols={2}>
+  <Card
+    title="Coding Agent"
+    icon="terminal"
+    href="/coding-agent/overview"
+  >
+    Interactive CLI tool with read, write, edit, and bash tools. Supports extensions, skills, themes, and packages.
+  </Card>
+  <Card
+    title="LLM API (@mariozechner/pi-ai)"
+    icon="brain"
+    href="/ai/overview"
+  >
+    Unified API for 15+ LLM providers with automatic model discovery, tool calling, and cross-provider handoffs.
+  </Card>
+  <Card
+    title="Agent Runtime (@mariozechner/pi-agent-core)"
+    icon="robot"
+    href="/agent/overview"
+  >
+    Stateful agent with tool execution, event streaming, and transport abstraction for building custom agents.
+  </Card>
+  <Card
+    title="Terminal UI (@mariozechner/pi-tui)"
+    icon="square-terminal"
+    href="/tui/overview"
+  >
+    Differential rendering framework for flicker-free terminal interfaces with built-in components.
+  </Card>
+  <Card
+    title="Web UI (@mariozechner/pi-web-ui)"
+    icon="browser"
+    href="/web-ui/overview"
+  >
+    Web components for AI chat interfaces with attachments, artifacts, and storage.
+  </Card>
+  <Card
+    title="Slack Bot (@mariozechner/pi-mom)"
+    icon="slack"
+    href="/mom/slack-bot"
+  >
+    Slack bot that delegates messages to the pi coding agent for team collaboration.
+  </Card>
+  <Card
+    title="vLLM Management (@mariozechner/pi-pods)"
+    icon="server"
+    href="/pods/vllm-management"
+  >
+    CLI for managing vLLM deployments on GPU pods for self-hosted inference.
+  </Card>
+</CardGroup>
+
+## Core Features
+
+### Unified LLM Access
+
+Work with any LLM provider through a single, consistent API:
+
+- **15+ Providers**: OpenAI, Anthropic, Google, Mistral, xAI, Groq, Cerebras, OpenRouter, and more
+- **Automatic Discovery**: Models and capabilities detected automatically
+- **Tool Calling**: TypeBox-validated function calling across all providers
+- **Cross-Provider Handoffs**: Switch models mid-conversation while preserving context
+- **OAuth Support**: Built-in support for subscription-based services (Claude Pro, ChatGPT Plus, GitHub Copilot)
+
+### Agent Building Blocks
+
+Build custom agents with minimal boilerplate:
+
+- **Event-Driven**: Subscribe to agent lifecycle events for real-time UI updates
+- **Tool Execution**: Automatic validation and error handling for tool calls
+- **State Management**: Built-in message history and context management
+- **Steering & Follow-up**: Interrupt agents mid-execution or queue follow-up tasks
+- **Transport Abstraction**: Run agents over HTTP, WebSocket, or in-process
+
+### Terminal & Web UIs
+
+Pre-built components for both terminal and browser:
+
+- **Terminal**: Editor, markdown renderer, select lists, loaders, overlays
+- **Web**: Chat panels, artifact viewers, file attachments, session management
+- **Themes**: Customizable styling for both environments
+- **Differential Rendering**: Efficient updates with no flicker
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Interactive Coding Assistant">
+    The flagship `@mariozechner/pi-coding-agent` provides a full-featured terminal interface for AI-assisted development with file operations, bash execution, and extensibility through TypeScript modules.
+  </Accordion>
+  <Accordion title="Custom Agent Applications">
+    Use `@mariozechner/pi-agent-core` and `@mariozechner/pi-ai` to build domain-specific agents with custom tools, prompts, and workflows.
+  </Accordion>
+  <Accordion title="Web-Based Chat Interfaces">
+    Deploy `@mariozechner/pi-web-ui` components in React/Next.js apps for AI chat with document processing and artifact generation.
+  </Accordion>
+  <Accordion title="Team Collaboration via Slack">
+    Run `@mariozechner/pi-mom` to bring AI assistance into Slack channels for team-wide access.
+  </Accordion>
+  <Accordion title="Self-Hosted LLM Infrastructure">
+    Manage GPU pods and vLLM deployments with `@mariozechner/pi-pods` for cost-effective inference.
+  </Accordion>
+</AccordionGroup>
+
+## Quick Navigation
+
+<CardGroup cols={3}>
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Install packages and set up your environment
+  </Card>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/quick-start"
+  >
+    Get running in under 5 minutes
+  </Card>
+  <Card
+    title="Architecture"
+    icon="sitemap"
+    href="/concepts/architecture"
+  >
+    Understand how the pieces fit together
+  </Card>
+  <Card
+    title="LLM Providers"
+    icon="plug"
+    href="/ai/providers"
+  >
+    Connect to 15+ LLM providers
+  </Card>
+  <Card
+    title="Building Extensions"
+    icon="puzzle-piece"
+    href="/guides/building-extensions"
+  >
+    Extend the coding agent with TypeScript
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api/ai/stream"
+  >
+    Explore the complete API surface
+  </Card>
+</CardGroup>
+
+## Community & Support
+
+<CardGroup cols={2}>
+  <Card
+    title="Discord Community"
+    icon="discord"
+    href="https://discord.com/invite/3cU7Bz4UPx"
+  >
+    Join the community for support and discussion
+  </Card>
+  <Card
+    title="GitHub Repository"
+    icon="github"
+    href="https://github.com/badlogic/pi-mono"
+  >
+    View source code, report issues, and contribute
+  </Card>
+</CardGroup>
+
+## Design Principles
+
+<Note>
+  **Minimal Core, Maximum Extensibility:** Pi deliberately omits features like sub-agents, plan mode, and permission popups from the core. Instead, these can be built as extensions, installed from packages, or implemented however fits your workflow. This keeps the foundation small and fast while enabling infinite customization.
+</Note>
+
+<Tip>
+  **No Lock-in:** Context and messages are plain JSON. Switch between models mid-conversation. Use different providers for different tasks. Pi doesn't force you into a single provider or workflow.
+</Tip>
+
+## What's Next?
+
+<Steps>
+  <Step title="Install Pi">
+    Follow the [installation guide](/installation) to set up the packages you need
+  </Step>
+  <Step title="Run the Quick Start">
+    Get hands-on with the [quick start tutorial](/quick-start) and build your first agent interaction
+  </Step>
+  <Step title="Explore the Docs">
+    Dive into [core concepts](/concepts/architecture) or jump straight to [API reference](/api/ai/stream)
+  </Step>
+</Steps>

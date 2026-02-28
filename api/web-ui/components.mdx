@@ -1,0 +1,494 @@
+---
+title: Web UI Components
+description: React components for building web-based AI chat interfaces
+---
+
+The `@mariozechner/pi-web-ui` package provides React components for building web-based AI chat interfaces.
+
+## Import
+
+```typescript
+import {
+  ChatPanel,
+  AgentInterface,
+  MessageList,
+  Input,
+  ModelSelector,
+  SettingsDialog,
+} from "@mariozechner/pi-web-ui";
+```
+
+## Core Components
+
+### ChatPanel
+
+Complete chat interface with message list, input, and agent integration.
+
+```tsx
+import { ChatPanel } from "@mariozechner/pi-web-ui";
+
+function App() {
+  return (
+    <ChatPanel
+      agent={agent}
+      onSendMessage={(text) => agent.prompt(text)}
+      theme="dark"
+    />
+  );
+}
+```
+
+<ParamField path="agent" type="Agent" required>
+  Agent instance from `@mariozechner/pi-agent-core`
+</ParamField>
+
+<ParamField path="onSendMessage" type="function" required>
+  Callback when user sends a message
+</ParamField>
+
+<ParamField path="theme" type="'light' | 'dark'">
+  Theme mode. Default: `'light'`
+</ParamField>
+
+### AgentInterface
+
+Complete agent interface with sidebar and settings.
+
+```tsx
+import { AgentInterface } from "@mariozechner/pi-web-ui";
+
+function App() {
+  return (
+    <AgentInterface
+      agent={agent}
+      onSendMessage={(text, attachments) => {
+        agent.prompt(text);
+      }}
+      showSidebar
+      enableAttachments
+    />
+  );
+}
+```
+
+<ParamField path="agent" type="Agent" required>
+  Agent instance
+</ParamField>
+
+<ParamField path="onSendMessage" type="function" required>
+  Callback with message text and optional attachments
+</ParamField>
+
+<ParamField path="showSidebar" type="boolean">
+  Show sidebar with sessions. Default: `false`
+</ParamField>
+
+<ParamField path="enableAttachments" type="boolean">
+  Enable file attachments. Default: `false`
+</ParamField>
+
+### MessageList
+
+Scrollable message list with custom renderers.
+
+```tsx
+import { MessageList } from "@mariozechner/pi-web-ui";
+
+function Chat() {
+  return (
+    <MessageList
+      messages={agent.state.messages}
+      streamMessage={agent.state.streamMessage}
+    />
+  );
+}
+```
+
+<ParamField path="messages" type="AgentMessage[]" required>
+  List of messages to display
+</ParamField>
+
+<ParamField path="streamMessage" type="AgentMessage | null">
+  Currently streaming message
+</ParamField>
+
+### Input
+
+Message input with autocomplete and attachments.
+
+```tsx
+import { Input } from "@mariozechner/pi-web-ui";
+
+function ChatInput() {
+  return (
+    <Input
+      onSubmit={(text, attachments) => {
+        console.log(`Send: ${text}`);
+      }}
+      placeholder="Type a message..."
+      enableAttachments
+    />
+  );
+}
+```
+
+<ParamField path="onSubmit" type="function" required>
+  Callback when message is submitted
+</ParamField>
+
+<ParamField path="placeholder" type="string">
+  Input placeholder text
+</ParamField>
+
+<ParamField path="enableAttachments" type="boolean">
+  Enable file attachments. Default: `false`
+</ParamField>
+
+<ParamField path="disabled" type="boolean">
+  Disable input. Default: `false`
+</ParamField>
+
+## Message Components
+
+### UserMessage
+
+Render a user message.
+
+```tsx
+import { UserMessage } from "@mariozechner/pi-web-ui";
+
+function MyMessage() {
+  return <UserMessage content="Hello!" />;
+}
+```
+
+### AssistantMessage
+
+Render an assistant message with markdown.
+
+```tsx
+import { AssistantMessage } from "@mariozechner/pi-web-ui";
+
+function MyMessage() {
+  return (
+    <AssistantMessage
+      content="Here's some **markdown** text."
+      thinking="Internal reasoning..."
+    />
+  );
+}
+```
+
+<ParamField path="content" type="string | Content[]" required>
+  Message content
+</ParamField>
+
+<ParamField path="thinking" type="string">
+  Reasoning/thinking content to display
+</ParamField>
+
+### ToolMessage
+
+Render a tool execution result.
+
+```tsx
+import { ToolMessage } from "@mariozechner/pi-web-ui";
+
+function MyMessage() {
+  return (
+    <ToolMessage
+      toolName="search"
+      content={[{ type: "text", text: "Results..." }]}
+      details={{ count: 10 }}
+    />
+  );
+}
+```
+
+<ParamField path="toolName" type="string" required>
+  Name of the tool
+</ParamField>
+
+<ParamField path="content" type="Content[]" required>
+  Tool result content
+</ParamField>
+
+<ParamField path="details" type="any">
+  Tool-specific metadata
+</ParamField>
+
+## Dialog Components
+
+### ModelSelector
+
+Dialog for selecting models.
+
+```tsx
+import { ModelSelector } from "@mariozechner/pi-web-ui";
+
+function App() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <ModelSelector
+      open={open}
+      onClose={() => setOpen(false)}
+      currentModel={agent.state.model}
+      onSelectModel={(model, thinkingLevel) => {
+        agent.updateState({ model, thinkingLevel });
+      }}
+    />
+  );
+}
+```
+
+<ParamField path="open" type="boolean" required>
+  Whether dialog is open
+</ParamField>
+
+<ParamField path="onClose" type="function" required>
+  Callback to close dialog
+</ParamField>
+
+<ParamField path="currentModel" type="Model" required>
+  Currently selected model
+</ParamField>
+
+<ParamField path="onSelectModel" type="function" required>
+  Callback when model is selected
+</ParamField>
+
+### SettingsDialog
+
+Dialog for application settings.
+
+```tsx
+import { SettingsDialog } from "@mariozechner/pi-web-ui";
+
+function App() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <SettingsDialog
+      open={open}
+      onClose={() => setOpen(false)}
+      tabs={["general", "api-keys", "proxy"]}
+    />
+  );
+}
+```
+
+<ParamField path="open" type="boolean" required>
+  Whether dialog is open
+</ParamField>
+
+<ParamField path="onClose" type="function" required>
+  Callback to close dialog
+</ParamField>
+
+<ParamField path="tabs" type="string[]">
+  Tabs to show. Default: `['general', 'api-keys']`
+</ParamField>
+
+### SessionListDialog
+
+Dialog for browsing and switching sessions.
+
+```tsx
+import { SessionListDialog } from "@mariozechner/pi-web-ui";
+
+function App() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <SessionListDialog
+      open={open}
+      onClose={() => setOpen(false)}
+      sessions={sessions}
+      currentSessionId={currentSessionId}
+      onSelectSession={(sessionId) => {
+        // Switch to session
+      }}
+    />
+  );
+}
+```
+
+## Utility Components
+
+### ThinkingBlock
+
+Collapsible thinking/reasoning display.
+
+```tsx
+import { ThinkingBlock } from "@mariozechner/pi-web-ui";
+
+function Message() {
+  return (
+    <ThinkingBlock thinking="Internal reasoning here..." />
+  );
+}
+```
+
+### ConsoleBlock
+
+Code execution console output.
+
+```tsx
+import { ConsoleBlock } from "@mariozechner/pi-web-ui";
+
+function ToolResult() {
+  return (
+    <ConsoleBlock
+      logs={[
+        { type: "log", message: "Hello" },
+        { type: "error", message: "Error!" },
+      ]}
+    />
+  );
+}
+```
+
+### ExpandableSection
+
+Collapsible section with header.
+
+```tsx
+import { ExpandableSection } from "@mariozechner/pi-web-ui";
+
+function Details() {
+  return (
+    <ExpandableSection title="Details" defaultExpanded={false}>
+      <div>Content here...</div>
+    </ExpandableSection>
+  );
+}
+```
+
+### AttachmentTile
+
+File attachment preview.
+
+```tsx
+import { AttachmentTile } from "@mariozechner/pi-web-ui";
+
+function Attachments() {
+  return (
+    <AttachmentTile
+      attachment={{
+        name: "image.png",
+        type: "image/png",
+        data: base64Data,
+      }}
+      onRemove={() => console.log("Removed")}
+    />
+  );
+}
+```
+
+## Custom Tool Renderers
+
+Register custom renderers for tool results:
+
+```tsx
+import { registerToolRenderer } from "@mariozechner/pi-web-ui";
+
+registerToolRenderer("my_tool", (props) => {
+  return (
+    <div>
+      <h3>My Tool Result</h3>
+      <pre>{JSON.stringify(props.details, null, 2)}</pre>
+    </div>
+  );
+});
+```
+
+## Custom Message Renderers
+
+Register custom renderers for message types:
+
+```tsx
+import { registerMessageRenderer } from "@mariozechner/pi-web-ui";
+
+registerMessageRenderer("artifact", (props) => {
+  return (
+    <div className="artifact">
+      <h3>{props.message.title}</h3>
+      <div>{props.message.content}</div>
+    </div>
+  );
+});
+```
+
+## Example: Complete App
+
+```tsx
+import React from "react";
+import { Agent } from "@mariozechner/pi-agent-core";
+import { getModel } from "@mariozechner/pi-ai";
+import {
+  AgentInterface,
+  SettingsDialog,
+  ModelSelector,
+} from "@mariozechner/pi-web-ui";
+
+function App() {
+  const [agent] = React.useState(() => new Agent({
+    initialState: {
+      systemPrompt: "You are a helpful assistant.",
+      model: getModel("anthropic", "claude-4.5-sonnet-20250514"),
+      thinkingLevel: "medium",
+      tools: [],
+      messages: [],
+    },
+  }));
+
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [modelSelectorOpen, setModelSelectorOpen] = React.useState(false);
+
+  const handleSendMessage = async (text: string, attachments?: Attachment[]) => {
+    // Convert attachments to content
+    const content = [
+      { type: "text", text },
+      ...attachments?.map(a => ({
+        type: "image",
+        data: a.data,
+        mimeType: a.type,
+      })) || [],
+    ];
+
+    const stream = agent.prompt(content);
+    await stream.result();
+  };
+
+  return (
+    <div className="app">
+      <AgentInterface
+        agent={agent}
+        onSendMessage={handleSendMessage}
+        showSidebar
+        enableAttachments
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenModelSelector={() => setModelSelectorOpen(true)}
+      />
+
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
+
+      <ModelSelector
+        open={modelSelectorOpen}
+        onClose={() => setModelSelectorOpen(false)}
+        currentModel={agent.state.model}
+        onSelectModel={(model, thinkingLevel) => {
+          agent.updateState({ model, thinkingLevel });
+          setModelSelectorOpen(false);
+        }}
+      />
+    </div>
+  );
+}
+
+export default App;
+```

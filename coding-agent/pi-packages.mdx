@@ -1,0 +1,570 @@
+---
+title: "Pi Packages"
+description: "Installing and creating Pi packages to share extensions, skills, prompts, and themes via npm or git"
+---
+
+<Note>
+Pi can help you create pi packages. Just ask it to bundle your extensions, skills, prompt templates, or themes.
+</Note>
+
+Pi packages bundle extensions, skills, prompt templates, and themes so you can share them through npm or git. A package can declare resources in `package.json` under the `pi` key, or use conventional directories.
+
+## Installing Packages
+
+<Warning>
+Pi packages run with full system access. Extensions execute arbitrary code, and skills can instruct the model to perform any action including running executables. Review source code before installing third-party packages.
+</Warning>
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    # Latest version
+    pi install npm:@foo/bar
+    
+    # Specific version (pinned, skipped by update)
+    pi install npm:@foo/bar@1.0.0
+    ```
+  </Tab>
+  
+  <Tab title="git (HTTPS)">
+    ```bash
+    # GitHub shorthand
+    pi install git:github.com/user/repo
+    
+    # Full HTTPS URL
+    pi install https://github.com/user/repo
+    
+    # With tag/commit (pinned)
+    pi install git:github.com/user/repo@v1
+    pi install https://github.com/user/repo@v1.0.0
+    ```
+  </Tab>
+  
+  <Tab title="git (SSH)">
+    ```bash
+    # git@host:path shorthand (requires git: prefix)
+    pi install git:git@github.com:user/repo
+    
+    # ssh:// protocol
+    pi install ssh://git@github.com/user/repo
+    
+    # With tag/commit (pinned)
+    pi install git:git@github.com:user/repo@v1.0.0
+    ```
+    
+    Uses your configured SSH keys (respects `~/.ssh/config`).
+  </Tab>
+  
+  <Tab title="Local Path">
+    ```bash
+    # Absolute path
+    pi install /absolute/path/to/package
+    
+    # Relative path
+    pi install ./relative/path/to/package
+    ```
+    
+    Not copied - added as reference.
+  </Tab>
+</Tabs>
+
+### Global vs Project Install
+
+By default, packages install **globally** (written to `~/.pi/agent/settings.json`).
+
+Use `-l` for **project** install (written to `.pi/settings.json`):
+
+```bash
+pi install -l npm:@foo/bar
+```
+
+**Project packages:**
+- Can be shared with your team
+- Auto-install on startup if missing
+- Override global packages
+
+### Trying Without Installing
+
+Test a package without installing:
+
+```bash
+pi -e npm:@foo/bar
+pi -e git:github.com/user/repo
+```
+
+Installs to a temporary directory for the current run only.
+
+## Managing Packages
+
+<Tabs>
+  <Tab title="List">
+    ```bash
+    pi list
+    ```
+    Shows all installed packages from settings.
+  </Tab>
+  
+  <Tab title="Update">
+    ```bash
+    # Update all non-pinned packages
+    pi update
+    
+    # Update specific package
+    pi update npm:@foo/bar
+    ```
+    
+    Skips packages with version specifiers.
+  </Tab>
+  
+  <Tab title="Remove">
+    ```bash
+    pi remove npm:@foo/bar
+    pi remove -l npm:@foo/bar  # From project settings
+    ```
+  </Tab>
+  
+  <Tab title="Configure">
+    ```bash
+    pi config
+    ```
+    
+    Enable/disable extensions, skills, prompts, and themes from installed packages.
+  </Tab>
+</Tabs>
+
+## Creating a Pi Package
+
+Add a `pi` manifest to `package.json` or use conventional directories. Include the `pi-package` keyword for discoverability.
+
+### Basic Package
+
+```json
+{
+  "name": "my-package",
+  "version": "1.0.0",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./extensions"],
+    "skills": ["./skills"],
+    "prompts": ["./prompts"],
+    "themes": ["./themes"]
+  }
+}
+```
+
+**Directory structure:**
+
+```
+my-package/
+├── package.json
+├── extensions/
+│   ├── deploy.ts
+│   └── monitor.ts
+├── skills/
+│   ├── web-search/
+│   │   └── SKILL.md
+│   └── transcribe/
+│       └── SKILL.md
+├── prompts/
+│   ├── review.md
+│   └── test.md
+└── themes/
+    ├── nord.json
+    └── tokyo-night.json
+```
+
+### Convention Directories
+
+If no `pi` manifest is present, Pi auto-discovers resources:
+
+- `extensions/` - `.ts` and `.js` files
+- `skills/` - Recursively finds `SKILL.md` folders and top-level `.md` files
+- `prompts/` - `.md` files
+- `themes/` - `.json` files
+
+### Gallery Metadata
+
+The [package gallery](https://shittycodingagent.ai/packages) displays packages tagged with `pi-package`. Add `video` or `image` for preview:
+
+```json
+{
+  "name": "my-package",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./extensions"],
+    "video": "https://example.com/demo.mp4",
+    "image": "https://example.com/screenshot.png"
+  }
+}
+```
+
+- **video**: MP4 only. Autoplays on hover (desktop), clicking opens fullscreen
+- **image**: PNG, JPEG, GIF, or WebP static preview
+
+If both are set, video takes precedence.
+
+## Package Structure
+
+### Single Type Package
+
+Packages can contain just one type of resource:
+
+<CodeGroup>
+```json Extensions Only
+{
+  "name": "pi-deploy",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./src"]
+  }
+}
+```
+
+```json Skills Only
+{
+  "name": "pi-skills",
+  "keywords": ["pi-package"],
+  "pi": {
+    "skills": ["./skills"]
+  }
+}
+```
+
+```json Themes Only
+{
+  "name": "pi-themes-nord",
+  "keywords": ["pi-package"],
+  "pi": {
+    "themes": ["./themes"]
+  }
+}
+```
+</CodeGroup>
+
+### Glob Patterns
+
+Arrays support glob patterns and exclusions:
+
+```json
+{
+  "pi": {
+    "extensions": [
+      "extensions/*.ts",
+      "!extensions/disabled.ts",
+      "+extensions/legacy.ts",
+      "-extensions/broken.ts"
+    ]
+  }
+}
+```
+
+- `pattern` - Glob match
+- `!pattern` - Exclude matches
+- `+path` - Force-include exact path
+- `-path` - Force-exclude exact path
+
+## Dependencies
+
+### Runtime Dependencies
+
+Third-party runtime dependencies belong in `dependencies`:
+
+```json
+{
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0"
+  }
+}
+```
+
+When Pi installs from npm or git, it runs `npm install` automatically.
+
+### Peer Dependencies
+
+Pi bundles core packages. List them in `peerDependencies` with `"*"` range and **do not bundle** them:
+
+```json
+{
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-agent-core": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  }
+}
+```
+
+### Bundled Dependencies
+
+Other pi packages must be bundled. Add them to `dependencies` **and** `bundledDependencies`:
+
+```json
+{
+  "dependencies": {
+    "shitty-extensions": "^1.0.1"
+  },
+  "bundledDependencies": ["shitty-extensions"],
+  "pi": {
+    "extensions": [
+      "extensions",
+      "node_modules/shitty-extensions/extensions"
+    ],
+    "skills": [
+      "skills",
+      "node_modules/shitty-extensions/skills"
+    ]
+  }
+}
+```
+
+## Package Filtering
+
+Users can filter what a package loads:
+
+```json
+{
+  "packages": [
+    "npm:simple-pkg",
+    {
+      "source": "npm:my-package",
+      "extensions": ["extensions/*.ts", "!extensions/legacy.ts"],
+      "skills": [],
+      "prompts": ["prompts/review.md"],
+      "themes": ["+themes/legacy.json"]
+    }
+  ]
+}
+```
+
+**Rules:**
+- Omit a key to load all of that type
+- Use `[]` to load none of that type
+- `!pattern` excludes matches
+- `+path` force-includes an exact path
+- `-path` force-excludes an exact path
+- Filters layer on top of the manifest (they narrow down what's allowed)
+
+## Publishing
+
+<Steps>
+  <Step title="Prepare Package">
+    Ensure:
+    - `package.json` has `pi` manifest
+    - `keywords` includes `"pi-package"`
+    - All resources are included
+    - Dependencies are declared
+  </Step>
+  
+  <Step title="Test Locally">
+    ```bash
+    pi -e ./path/to/package
+    ```
+  </Step>
+  
+  <Step title="Publish">
+    **npm:**
+    ```bash
+    npm publish
+    ```
+    
+    **git:**
+    ```bash
+    git tag v1.0.0
+    git push origin v1.0.0
+    ```
+  </Step>
+  
+  <Step title="Users Install">
+    ```bash
+    pi install npm:my-package
+    pi install git:github.com/user/my-package@v1.0.0
+    ```
+  </Step>
+</Steps>
+
+## Scope and Deduplication
+
+Packages can appear in both global and project settings. If the same package appears in both, the **project entry wins**.
+
+Identity is determined by:
+- **npm:** package name
+- **git:** repository URL (without ref)
+- **local:** resolved absolute path
+
+## Example Packages
+
+<CardGroup cols={2}>
+  <Card title="pi-skills" icon="github" href="https://github.com/badlogic/pi-skills">
+    Official skills: web search, browser, transcription, Google APIs
+  </Card>
+  <Card title="Package Gallery" icon="box" href="https://shittycodingagent.ai/packages">
+    Browse community packages
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep packages focused">
+    Create separate packages for different purposes:
+    - `my-web-tools` - Web scraping extensions
+    - `my-themes` - Theme collection
+    - `my-ai-skills` - AI/ML skills
+    
+    This makes it easier for users to install only what they need.
+  </Accordion>
+  
+  <Accordion title="Document everything">
+    Include a comprehensive README with:
+    - What the package provides
+    - How to install
+    - Usage examples
+    - Configuration options
+    - Screenshots/demos
+  </Accordion>
+  
+  <Accordion title="Version carefully">
+    Follow semantic versioning:
+    - **Patch** (1.0.1): Bug fixes, documentation
+    - **Minor** (1.1.0): New features, backward compatible
+    - **Major** (2.0.0): Breaking changes
+  </Accordion>
+  
+  <Accordion title="Test before publishing">
+    Test locally with:
+    ```bash
+    pi -e ./path/to/package
+    ```
+    
+    Verify:
+    - All resources load
+    - Extensions work
+    - Skills execute
+    - Themes display correctly
+  </Accordion>
+  
+  <Accordion title="Add gallery media">
+    Include `video` or `image` in the manifest to make your package stand out in the gallery.
+  </Accordion>
+  
+  <Accordion title="Declare dependencies correctly">
+    - Runtime deps in `dependencies`
+    - Pi packages in `peerDependencies` (core) or `bundledDependencies` (other)
+    - Dev deps in `devDependencies`
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Topics
+
+### Multi-Package Projects
+
+For monorepos with multiple pi packages:
+
+```json
+{
+  "workspaces": ["packages/*"],
+  "pi": {
+    "extensions": [
+      "packages/*/extensions"
+    ],
+    "skills": [
+      "packages/*/skills"
+    ]
+  }
+}
+```
+
+### Private Packages
+
+For private npm registries or git repositories:
+
+```bash
+# npm with private registry
+pi install npm:@myorg/private-package
+
+# Private GitHub repo (requires SSH key)
+pi install git:git@github.com:myorg/private-repo
+
+# GitLab
+pi install git:git@gitlab.com:myorg/private-repo
+```
+
+Ensure you're authenticated with the registry/service.
+
+### Offline Use
+
+For environments without internet:
+
+1. Install packages on a connected machine
+2. Copy the package directories:
+   - npm global: `npm root -g`
+   - npm local: `.pi/npm/`
+   - git global: `~/.pi/agent/git/`
+   - git local: `.pi/git/`
+3. Transfer to offline machine
+4. Use local path installs:
+   ```bash
+   pi install ./copied-packages/my-package
+   ```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Package not loading">
+    Check:
+    - Package is in `pi list`
+    - Resources are enabled in `pi config`
+    - Paths in manifest are correct
+    - JSON is valid
+    - `npm install` ran (for git packages)
+  </Accordion>
+  
+  <Accordion title="git clone fails">
+    For SSH:
+    - Verify SSH key is added: `ssh -T git@github.com`
+    - Check `~/.ssh/config` for host aliases
+    - Use HTTPS instead if SSH is problematic
+  </Accordion>
+  
+  <Accordion title="Update doesn't fetch latest">
+    Pinned packages (with version/tag) are skipped by `pi update`. Remove the pin:
+    
+    ```bash
+    pi remove npm:@foo/bar@1.0.0
+    pi install npm:@foo/bar
+    pi update
+    ```
+  </Accordion>
+  
+  <Accordion title="Dependency conflicts">
+    If dependencies conflict between packages:
+    - Check if they're peer dependencies (should use Pi's bundled version)
+    - Consider bundling dependencies in one package
+    - Report incompatibility to package authors
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Extensions" icon="puzzle-piece" href="/coding-agent/extensions">
+    Build TypeScript extensions
+  </Card>
+  <Card title="Skills" icon="book" href="/coding-agent/skills">
+    Create Agent Skills
+  </Card>
+  <Card title="Prompt Templates" icon="file-lines" href="/coding-agent/prompt-templates">
+    Make reusable prompts
+  </Card>
+  <Card title="Themes" icon="palette" href="/coding-agent/themes">
+    Design custom themes
+  </Card>
+  <Card title="Package Gallery" icon="box" href="https://shittycodingagent.ai/packages">
+    Browse existing packages
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/badlogic/pi-mono">
+    View source & examples
+  </Card>
+</CardGroup>

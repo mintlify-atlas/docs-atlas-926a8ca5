@@ -1,0 +1,430 @@
+---
+title: TUI Types
+description: Type definitions for the TUI package
+---
+
+Core TypeScript types for the `@mariozechner/pi-tui` package.
+
+## Import
+
+```typescript
+import type {
+  Component,
+  Focusable,
+  Terminal,
+  OverlayOptions,
+  EditorOptions,
+  SelectItem,
+} from "@mariozechner/pi-tui";
+```
+
+## Component Types
+
+### Component
+
+Base component interface.
+
+```typescript
+interface Component {
+  render(width: number): string[];
+  handleInput?(data: string): void;
+  wantsKeyRelease?: boolean;
+  invalidate(): void;
+}
+```
+
+### Focusable
+
+Interface for components that can receive focus.
+
+```typescript
+interface Focusable {
+  focused: boolean;
+}
+```
+
+## Terminal Types
+
+### Terminal
+
+Terminal abstraction interface.
+
+```typescript
+interface Terminal {
+  write(data: string): void;
+  getSize(): { rows: number; cols: number };
+  setRawMode(enabled: boolean): void;
+  onData(callback: (data: string) => void): void;
+  onResize(callback: () => void): void;
+  clear(): void;
+}
+```
+
+## Layout Types
+
+### OverlayOptions
+
+Options for overlay positioning.
+
+```typescript
+interface OverlayOptions {
+  width?: SizeValue;
+  minWidth?: number;
+  maxHeight?: SizeValue;
+  anchor?: OverlayAnchor;
+  offsetX?: number;
+  offsetY?: number;
+  row?: SizeValue;
+  col?: SizeValue;
+  margin?: OverlayMargin | number;
+  visible?: (termWidth: number, termHeight: number) => boolean;
+}
+```
+
+### SizeValue
+
+```typescript
+type SizeValue = number | `${number}%`;
+```
+
+### OverlayAnchor
+
+```typescript
+type OverlayAnchor =
+  | "center"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "top-center"
+  | "bottom-center"
+  | "left-center"
+  | "right-center";
+```
+
+### OverlayMargin
+
+```typescript
+interface OverlayMargin {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}
+```
+
+### OverlayHandle
+
+Opaque handle for overlay management.
+
+```typescript
+type OverlayHandle = { readonly __brand: unique symbol };
+```
+
+## Editor Types
+
+### EditorOptions
+
+```typescript
+interface EditorOptions {
+  placeholder?: string;
+  language?: string;
+  theme?: EditorTheme;
+  keybindings?: EditorKeybindingsConfig;
+  autocomplete?: AutocompleteProvider;
+}
+```
+
+### EditorTheme
+
+```typescript
+interface EditorTheme {
+  text: string;
+  cursor: string;
+  selection: string;
+  lineNumber: string;
+  placeholder: string;
+}
+```
+
+### EditorKeybindingsConfig
+
+```typescript
+type EditorKeybindingsConfig = Record<string, EditorAction>;
+
+type EditorAction =
+  | "move-left"
+  | "move-right"
+  | "move-up"
+  | "move-down"
+  | "move-word-left"
+  | "move-word-right"
+  | "move-line-start"
+  | "move-line-end"
+  | "move-doc-start"
+  | "move-doc-end"
+  | "delete-char"
+  | "delete-word"
+  | "delete-line"
+  | "newline"
+  | "submit"
+  | "cancel"
+  | "undo"
+  | "redo";
+```
+
+## List Types
+
+### SelectItem
+
+```typescript
+interface SelectItem {
+  id: string;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+}
+```
+
+### SelectListTheme
+
+```typescript
+interface SelectListTheme {
+  selected: string;
+  unselected: string;
+  disabled: string;
+  searchQuery: string;
+}
+```
+
+### SettingItem
+
+```typescript
+interface SettingItem {
+  id: string;
+  label: string;
+  value: string;
+  description?: string;
+}
+```
+
+### SettingsListTheme
+
+```typescript
+interface SettingsListTheme {
+  selected: string;
+  unselected: string;
+  value: string;
+  description: string;
+}
+```
+
+## Markdown Types
+
+### MarkdownTheme
+
+```typescript
+interface MarkdownTheme {
+  heading1: string;
+  heading2: string;
+  heading3: string;
+  bold: string;
+  italic: string;
+  code: string;
+  codeBlock: string;
+  link: string;
+  list: string;
+}
+```
+
+### DefaultTextStyle
+
+```typescript
+interface DefaultTextStyle {
+  color?: string;
+  backgroundColor?: string;
+  bold?: boolean;
+  dim?: boolean;
+  italic?: boolean;
+}
+```
+
+## Image Types
+
+### ImageOptions
+
+```typescript
+interface ImageOptions {
+  data: string;        // base64
+  mimeType: string;
+  maxWidth?: number;
+  maxHeight?: number;
+  theme?: ImageTheme;
+}
+```
+
+### ImageTheme
+
+```typescript
+interface ImageTheme {
+  border?: string;
+}
+```
+
+### ImageProtocol
+
+```typescript
+type ImageProtocol = "kitty" | "iterm2" | null;
+```
+
+### TerminalCapabilities
+
+```typescript
+interface TerminalCapabilities {
+  imageProtocol: ImageProtocol;
+  colorDepth: 24 | 256 | 16;
+  cellDimensions: CellDimensions | null;
+}
+```
+
+### CellDimensions
+
+```typescript
+interface CellDimensions {
+  width: number;   // pixels
+  height: number;  // pixels
+}
+```
+
+## Keyboard Types
+
+### Key
+
+Keyboard input representation.
+
+```typescript
+interface Key {
+  type: KeyEventType;
+  sequence: string;
+  name?: string;
+  ctrl?: boolean;
+  shift?: boolean;
+  alt?: boolean;
+  meta?: boolean;
+}
+```
+
+### KeyEventType
+
+```typescript
+type KeyEventType = "press" | "release" | "repeat";
+```
+
+### KeyId
+
+```typescript
+type KeyId = string; // e.g., "ctrl+c", "enter", "esc"
+```
+
+## Autocomplete Types
+
+### AutocompleteProvider
+
+```typescript
+interface AutocompleteProvider {
+  getSuggestions(text: string, cursorPos: number): Promise<AutocompleteItem[]>;
+}
+```
+
+### AutocompleteItem
+
+```typescript
+interface AutocompleteItem {
+  text: string;
+  label?: string;
+  description?: string;
+}
+```
+
+### SlashCommand
+
+```typescript
+interface SlashCommand {
+  name: string;
+  description?: string;
+  shortcut?: string;
+}
+```
+
+## Fuzzy Matching Types
+
+### FuzzyMatch
+
+```typescript
+interface FuzzyMatch {
+  item: string;
+  score: number;
+  indices: number[];
+}
+```
+
+## Stdin Buffer Types
+
+### StdinBufferOptions
+
+```typescript
+interface StdinBufferOptions {
+  batchSize?: number;
+  batchDelayMs?: number;
+}
+```
+
+### StdinBufferEventMap
+
+```typescript
+interface StdinBufferEventMap {
+  data: { data: string };
+  error: { error: Error };
+}
+```
+
+## Example: Type-Safe Component
+
+```typescript
+import type {
+  Component,
+  Focusable,
+  EditorOptions,
+  SelectItem,
+} from "@mariozechner/pi-tui";
+import { Editor, SelectList } from "@mariozechner/pi-tui";
+
+// Type-safe editor options
+const editorOptions: EditorOptions = {
+  placeholder: "Type here...",
+  language: "typescript",
+  keybindings: {
+    "ctrl+enter": "submit",
+    "escape": "cancel",
+  },
+};
+
+const editor = new Editor(editorOptions);
+
+// Type-safe select list
+const items: SelectItem[] = [
+  { id: "1", label: "Option 1" },
+  { id: "2", label: "Option 2", disabled: true },
+];
+
+const list = new SelectList({ items });
+
+// Type guard
+if (isFocusable(editor)) {
+  editor.focused = true;
+}
+
+function isFocusable(component: Component): component is Component & Focusable {
+  return "focused" in component;
+}
+```
